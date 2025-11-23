@@ -3,6 +3,8 @@
 #define SMASH_COMMAND_H_
 
 #include <vector>
+#include <string>
+#include <memory>
 
 #define COMMAND_MAX_LENGTH (200)
 #define COMMAND_MAX_ARGS (20)
@@ -52,7 +54,8 @@ public:
 };
 
 class PipeCommand : public Command {
-
+    Command* firstCommand;
+    Command* secondCommand;
 public:
     PipeCommand(const char *cmd_line);
 
@@ -146,17 +149,25 @@ class QuitCommand : public BuiltInCommand {
     void execute() override;
 };
 
+
 class JobsList {
+    int getNextJobID();
 public:
     class JobEntry {
-        // TODO: Add your data members
+        int jobId = 0;
+        pid_t pid = -2;
+        const std::string commandLine;
+    public:
+        int getJobId() const { return jobId; }
+        pid_t getPid() const { return pid; }
+        std::string getCommandLine() const { return commandLine; }
     };
+std::vector<JobEntry> jobsVector;
 
-    // TODO: Add your data members
 public:
     JobsList();
 
-    ~JobsList();
+    ~JobsList(){jobsVector.clear();};
 
     void addJob(Command *cmd, bool isStopped = false);
 
@@ -174,18 +185,24 @@ public:
 
     JobEntry *getLastStoppedJob(int *jobId);
 
-    // TODO: Add extra methods or modify exisitng ones as needed
+    bool is_there_a_job_with_pid(const int pid);
+
+    int getJobList_size() {
+        removeFinishedJobs();
+        return jobsVector.size();
+    }
 };
 
 class JobsCommand : public BuiltInCommand {
-    // TODO: Add your data members
+    JobsList *jobs;
 public:
-    JobsCommand(const char *cmd_line, JobsList *jobs);
+    JobsCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) {}
 
-    virtual ~JobsCommand() {
+    virtual ~JobsCommand();
+
+    void execute() override {
+        jobs->printJobsList();
     }
-
-    void execute() override;
 };
 
 class KillCommand : public BuiltInCommand {

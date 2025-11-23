@@ -8,7 +8,5 @@ add_executable(skeleton_smash
     smash.cpp
     Commands.cpp
     signals.cpp
-        JobList.h
-        JobList.h
         smash.cpp
 )
