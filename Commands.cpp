@@ -76,11 +76,82 @@ void _removeBackgroundSign(char *cmd_line) {
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-// TODO: Add your implementation for classes in Commands.h 
+void JobsList::removeJobById(int jobId) {
+    for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
+        if (i->getJobId() == jobId) {
+            jobsVector.erase(i);
+            return;
+        }
+    }
+}
+
+void JobsList::removeFinishedJobs() {
+    auto it = jobsVector.begin();
+
+    while (it != jobsVector.end()) {
+        pid_t pid = it->getPid();
+        int status;
+
+        pid_t result = waitpid(pid, &status, WNOHANG);
+
+        if (result == pid) {
+            it = jobsVector.erase(it);
+        }
+        else if (result == -1) {
+            it = jobsVector.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+int JobsList::getNextJobID() {
+    removeFinishedJobs();
+    int maxId = 0;
+    for (const auto &job : jobsVector) {
+        if (job.getJobId() > maxId) {
+            maxId = job.getJobId();
+        }
+    }
+    return maxId + 1;
+}
+
+bool JobsList::is_there_a_job_with_pid(const int pid) {
+    removeFinishedJobs();
+    for (const auto &job : jobsVector) {
+        if (job.getPid() == pid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void JobsList::addJob(Command *cmd, bool isStopped) {
+    removeFinishedJobs();
+    pid_t pid = cmd->getPid();
+    string cmdLine = cmd->getCmdLine();
+    int jobId = getNextJobID();
+    JobEntry newJob;
+    newJob.setJobId(jobId);
+    newJob.setPid(pid);
+    newJob.setCommandLine(cmdLine);
+    newJob.setStopped(isStopped);
+    jobsVector.push_back(newJob);
+}
+
+void JobsList::printJobsList() {
+    removeFinishedJobs();
+    string resault;
+    for (const auto &job : jobsVector) {
+        resault += "[" + std::to_string(job.getJobId()) + "] " +
+                       job.getCommandLine()  + "\n";
+    }
+}
 
 SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({}){
     // TODO: add your implementation
-}
+
 
 SmallShell::~SmallShell() {
     // TODO: add your implementation
@@ -273,7 +344,6 @@ void SmallShell::addAlias(char** argv)
     string name = string(argv[1]).substr(0, name_end);
     int command_length = string(argv[1]).length() - (name_end + 2);
     string command_string = string(argv[1]).substr(name_end + 2, command_length - 1);
-    cout << command_string << endl;
     if(!AliasExists(name))
     {
         this->aliasVector.push_back({name, command_string});
@@ -356,6 +426,9 @@ void SysInfoCommand::execute()
 }
 
 
+void PipeCommand::execute() {
+
+}
 
 
 
