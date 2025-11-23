@@ -8,7 +8,7 @@
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
-    // TODO: Add your data members
+
 public:
     Command(const char *cmd_line);
 
@@ -18,7 +18,7 @@ public:
 
     //virtual void prepare();
     //virtual void cleanup();
-    // TODO: Add your extra methods if needed
+
 };
 
 class BuiltInCommand : public Command {
@@ -41,7 +41,7 @@ public:
 
 
 class RedirectionCommand : public Command {
-    // TODO: Add your data members
+
 public:
     explicit RedirectionCommand(const char *cmd_line);
 
@@ -52,7 +52,7 @@ public:
 };
 
 class PipeCommand : public Command {
-    // TODO: Add your data members
+
 public:
     PipeCommand(const char *cmd_line);
 
@@ -137,7 +137,7 @@ public:
 class JobsList;
 
 class QuitCommand : public BuiltInCommand {
-    // TODO: Add your data members public:
+
     QuitCommand(const char *cmd_line, JobsList *jobs);
 
     virtual ~QuitCommand() {

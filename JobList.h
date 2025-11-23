@@ -19,12 +19,13 @@ public:
 class JobList {
     std::shared_ptr<Job> head = nullptr;
     std::shared_ptr<Job> tail = nullptr;
+    int num_of_running_jobs = 0;
 public:
     ~JobList() {
-        std::shared_ptr<Job> curr = head;
+        std::shared_ptr<Job> curr = tail;
         if (curr == nullptr)
             return;
-        std::shared_ptr<Job> next = head->getNext();
+        std::shared_ptr<Job> next = tail->getNext();
         while (next != nullptr) {
             curr.reset();
             curr = next;
@@ -34,7 +35,7 @@ public:
 
     bool is_there_a_job_with_pid(const int pid) {
         clean_dead_jobs();
-        std::shared_ptr<Job> curr = head;
+        std::shared_ptr<Job> curr = tail;
         while (curr != nullptr) {
             if (curr->getPID() == pid) {
                 return true;
@@ -53,12 +54,14 @@ public:
             head->setNext(job);
             head = job;
         }
+        num_of_running_jobs++;
     }
+
     std::string deleteJob_byPID(const int pidToDelete = 0) {
-        std::shared_ptr<Job> curr = head;
+        std::shared_ptr<Job> curr = tail;
         if(curr == nullptr && pidToDelete == 0)
             throw std::invalid_argument("smash error: fg: jobs list is empty");
-        std::shared_ptr<Job> next = head->getNext();
+        std::shared_ptr<Job> next = tail->getNext();
         std::string toReturn;
         while (next != nullptr) {
             if(next->getPID() == pidToDelete) {
@@ -72,6 +75,7 @@ public:
                 }
                 toReturn = next->getCommandLine();
                 next.reset();
+                num_of_running_jobs--;
                 return toReturn;
             }
             curr = next;
@@ -83,7 +87,7 @@ public:
     int getNextJobID() {
         clean_dead_jobs();
         int max = 0;
-        std::shared_ptr<Job> curr = head;
+        std::shared_ptr<Job> curr = tail;
         while (curr != nullptr) {
             if (curr->getID() > max) {
                 max = curr->getID();
@@ -93,15 +97,43 @@ public:
         return max + 1;
     }
 
-    void clean_dead_jobs();
+    void clean_dead_jobs() {
+        std::shared_ptr<Job> curr = tail;
+        if (curr == nullptr)
+            return;
+        std::shared_ptr<Job> next_job = curr->getNext();
+        while(next_job != nullptr) {
+            int status;
+            pid_t result = waitpid(next_job->getPID(), &status, WNOHANG);
+            if (result != -1) {
+                if (result > 0) {
+                    curr->setNext(next_job->getNext());
+                    if (head == next_job) {
+                        if (next_job->getNext() == nullptr) {
+                            head = curr;
+                        }else {
+                            head = next_job->getNext();
+                        }
+                    }
+                    next_job.reset();
+                    num_of_running_jobs--;
+                    next_job = curr->getNext();
+                } else {
+                    curr = next_job;
+                    next_job = next_job->getNext();
+                }
+            }
+        }
+    }
 
     std::string printJobs() {
         clean_dead_jobs();
         std::string result;
-        std::shared_ptr<Job> curr = head;
+        std::shared_ptr<Job> curr = tail;
         while (curr != nullptr) {
             result += "[" + std::to_string(curr->getID()) + "] " +
                       curr->getCommandLine()  + "\n";
+            curr = curr->getNext();
         }
         return result;
     }

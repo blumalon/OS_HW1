@@ -76,10 +76,10 @@ void _removeBackgroundSign(char *cmd_line) {
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
-// TODO: Add your implementation for classes in Commands.h 
+
 
 SmallShell::SmallShell() : previousDir(nullptr) , alliasVector({}){
-    // TODO: add your implementation
+
 }
 
 SmallShell::~SmallShell() {
