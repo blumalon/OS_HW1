@@ -213,8 +213,7 @@ public:
 class AliasCommand : public BuiltInCommand {
     const char* cmd_line;
 public:
-    AliasCommand(const char *cmd_line);
-
+    explicit AliasCommand(const char *cmd_line);
     virtual ~AliasCommand() {
     }
 
@@ -222,7 +221,9 @@ public:
 };
 
 class UnAliasCommand : public BuiltInCommand {
+    const char* cmd_line;
 public:
+
     UnAliasCommand(const char *cmd_line);
 
     virtual ~UnAliasCommand() {
@@ -255,14 +256,15 @@ class SmallShell {
 private:
     std::string currentPrompt = "smash";
     char* previousDir;
-    std::vector<std::pair<std::string, std::string>> alliasVector;
+    std::vector<std::pair<std::string, std::string>> aliasVector;
     SmallShell();
 
 public:
     char** getPreviousDirPtr() {return &previousDir;}
     void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
+    std::vector<std::pair<std::string, std::string>>& getAliasVector() {return aliasVector;}
     void printAlias();
-    void addAlias(std::string newAlias);
+    void addAlias(char** argv);
     Command *CreateCommand(const char *cmd_line);
 
     std::string getPrompt() const {

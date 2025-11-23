@@ -78,7 +78,7 @@ void _removeBackgroundSign(char *cmd_line) {
 
 // TODO: Add your implementation for classes in Commands.h 
 
-SmallShell::SmallShell() : previousDir(nullptr) , alliasVector({}){
+SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({}){
     // TODO: add your implementation
 }
 
@@ -90,41 +90,38 @@ SmallShell::~SmallShell() {
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
 */
 Command *SmallShell::CreateCommand(const char *cmd_line) {
-    string cmd_s = _trim(string(cmd_line));
-    string secondWord;
-    string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
-    size_t rest_start_pos = cmd_s.find_first_not_of(" \n", cmd_s.find_first_of(" \n"));
-    if (cmd_s.find_first_of(" \n") == string::npos) {
-        secondWord = "";
-    }
-    else
-    {
-        string remaining_args = cmd_s.substr(rest_start_pos);
-        secondWord = remaining_args.substr(0, remaining_args.find_first_of(" \n"));
+    char* args[COMMAND_MAX_ARGS];
+    char** argv = args;
+    int argc = _parseCommandLine(cmd_line, argv);
+
+    if (string(argv[0]).compare("chprompt") == 0) {
+      return new ChangePrompt(argv[1]);
     }
 
-    if (firstWord.compare("chprompt") == 0) {
-      return new ChangePrompt(secondWord);
-    }
-
-    if (firstWord.compare("showpid") == 0) {
+    if (string(argv[0]).compare("showpid") == 0) {
       return new ShowPidCommand(cmd_line);
     }
 
-    if (firstWord.compare("pwd") == 0) {
+    if (string(argv[0]).compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
     }
 /*
-    if (firstWord.compare("cd") == 0) {
-        if(!secondWord.empty())
+    if (string(argv[0]).compare("cd") == 0) {
+        if(!argv[1])
         {
-            char* pSecWord = &secondWord[0];
+            char* pSecWord = &argv[1];
             return new ChangeDirCommand(pSecWord);
         }
     }
 */
-    if (firstWord.compare("alias") == 0) {
+    if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("unalias") == 0) {
+        return new UnAliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("sysinfo") == 0) {
+        return new SysInfoCommand(cmd_line);
     }
     // For example:
     /*
@@ -193,6 +190,7 @@ void GetCurrDirCommand::execute(){
     if (!getcwd(buffer, sizeof(buffer))) cout << "error!" << endl;
     else cout << buffer << endl;
 }
+
 /*
 ChangeDirCommand::ChangeDirCommand(char* path, char** plastPwd) : BuiltInCommand("") , previousDir(plastPwd) , moveTo(path){
 }
@@ -233,6 +231,7 @@ void ChangeDirCommand::execute()
         }
     }
 */
+
 AliasCommand::AliasCommand(const char* cmd_line) : BuiltInCommand("")
 {
     this->cmd_line = cmd_line;
@@ -240,32 +239,59 @@ AliasCommand::AliasCommand(const char* cmd_line) : BuiltInCommand("")
 
 void SmallShell::printAlias()
 {
-    for (const auto& pair : this->alliasVector) {
+    for (const auto& pair : this->aliasVector) {
         cout << pair.first
                   << "='" << pair.second << "'" << endl;
     }
 }
 
-void SmallShell::addAlias(std::string newAlias)
+bool AliasExists(const std::string& newName)
 {
-    size_t equals_pos = newAlias.find('=');
-    std::string name = newAlias.substr(0, equals_pos);
-    size_t start_quote_pos = newAlias.find('\'');
-    size_t end_quote_pos = newAlias.rfind('\'');
-    size_t command_start = start_quote_pos + 1;
-    size_t command_length = end_quote_pos - command_start;
-    std::string command_string = newAlias.substr(command_start, command_length);
+    for (const auto& pair : SmallShell::getInstance().getAliasVector()) {
+        if (pair.first == newName) {
+            return true;
+        }
+    }
+    return false;
+}
 
-    this->alliasVector.push_back({name, command_string});
+void AliasRemove(const std::string& Name)
+{
+    vector<pair<string,string>>& vector = SmallShell::getInstance().getAliasVector();
+    for (auto it = vector.begin(); it != vector.end();) {
+        if (it->first == Name) {
+            vector.erase(it);
+            return;
+        }
+        ++it;
+    }
+}
+
+void SmallShell::addAlias(char** argv)
+{
+    int name_end = string(argv[1]).find_first_of('=');
+    string name = string(argv[1]).substr(0, name_end);
+    int command_length = string(argv[1]).length() - (name_end + 2);
+    string command_string = string(argv[1]).substr(name_end + 2, command_length - 1);
+    cout << command_string << endl;
+    if(!AliasExists(name))
+    {
+        this->aliasVector.push_back({name, command_string});
+    }
+    else
+    {
+        cout << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+    }
 }
 
 void AliasCommand::execute()
 {
-    std::string cmd_s = _trim(std::string(this->cmd_line));
-    size_t first_space = cmd_s.find_first_of(WHITESPACE);
-    size_t arg_start = cmd_s.find_first_not_of(WHITESPACE, first_space);
-
-    if (arg_start == std::string::npos)
+    const char* raw_cmd_line = this->cmd_line;
+    string cmd_s = _trim(raw_cmd_line);
+    char* args[COMMAND_MAX_ARGS];
+    char** argv = args;
+    int argc = _parseCommandLine(raw_cmd_line, argv);
+    if (argc == 1)
     {
         SmallShell::getInstance().printAlias();
         return;
@@ -273,14 +299,62 @@ void AliasCommand::execute()
     const std::regex pattern("^alias [a-zA-Z0-9_]+='[^']*'$");
     if(std::regex_match(cmd_s, pattern))
     {
-        std::string alias_arg = cmd_s.substr(arg_start);
-        SmallShell::getInstance().addAlias(alias_arg);
+        SmallShell::getInstance().addAlias(argv);
     }
     else
     {
-        cout << "bad syntax" << endl;
+        cout << "smash error: alias: invalid alias format" << endl;
     }
 }
+
+UnAliasCommand::UnAliasCommand(const char* cmd_line) : BuiltInCommand("")
+{
+    this->cmd_line = cmd_line;
+}
+
+void UnAliasCommand::execute()
+{
+    const char* raw_cmd_line = this->cmd_line;
+    char* args[COMMAND_MAX_ARGS];
+    char** argv = args;
+    int argc = 0;
+    argc = _parseCommandLine(raw_cmd_line, argv);
+    if (argc == 1)
+    {
+        cout << "smash error: unalias: not enough arguments" << endl;
+    }
+    else
+    {
+        int i = 1;
+        while(i < argc)
+        {
+            if(!AliasExists(std::string(argv[i])))
+            {
+                cout << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
+                return;
+            }
+            else
+            {
+                AliasRemove(std::string(argv[i]));
+            }
+            i++;
+        }
+    }
+    for (int i = 0; i < argc; ++i) {
+        free(argv[i]);
+    }
+}
+
+SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
+{
+
+}
+
+void SysInfoCommand::execute()
+{
+
+}
+
 
 
 
