@@ -23,7 +23,7 @@ public:
 
 class BuiltInCommand : public Command {
 public:
-    BuiltInCommand(const char *cmd_line);
+    explicit BuiltInCommand(const char *cmd_line);
 
     virtual ~BuiltInCommand() {
     }
@@ -94,11 +94,22 @@ public:
 };
 
 class ChangeDirCommand : public BuiltInCommand {
-    // TODO: Add your data members public:
-    ChangeDirCommand(const char *cmd_line, char **plastPwd);
+    char* moveTo;
+public:
+    ChangeDirCommand(char *path);
 
-    virtual ~ChangeDirCommand() {
-    }
+    virtual ~ChangeDirCommand() = default;
+
+    void execute() override;
+};
+
+class ChangePrompt : public BuiltInCommand {
+    std::string prompt;
+public:
+    explicit ChangePrompt(std::string const& prompt);
+
+    virtual ~ChangePrompt() = default;
+
 
     void execute() override;
 };
@@ -200,6 +211,7 @@ public:
 };
 
 class AliasCommand : public BuiltInCommand {
+    const char* cmd_line;
 public:
     AliasCommand(const char *cmd_line);
 
@@ -242,13 +254,22 @@ public:
 class SmallShell {
 private:
     std::string currentPrompt = "smash";
+    char* previousDir;
+    std::vector<std::pair<std::string, std::string>> alliasVector;
     SmallShell();
 
 public:
+    char** getPreviousDirPtr() {return &previousDir;}
+    void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
+    void printAlias();
+    void addAlias(std::string newAlias);
     Command *CreateCommand(const char *cmd_line);
 
     std::string getPrompt() const {
         return currentPrompt;
+    }
+    void setPrompt(std::string const & prompt) {
+        currentPrompt = prompt;
     }
     SmallShell(SmallShell const &) = delete; // disable copy ctor
     void operator=(SmallShell const &) = delete; // disable = operator
