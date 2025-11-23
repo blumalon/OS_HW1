@@ -75,7 +75,7 @@ void _removeBackgroundSign(char *cmd_line) {
     // truncate the command line string up to the last non-space character
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
-
+/*
 void JobsList::removeJobById(int jobId) {
     for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
         if (i->getJobId() == jobId) {
@@ -148,10 +148,11 @@ void JobsList::printJobsList() {
                        job.getCommandLine()  + "\n";
     }
 }
-
-SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({}){
+*/
+SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({})
+{
     // TODO: add your implementation
-
+}
 
 SmallShell::~SmallShell() {
     // TODO: add your implementation
@@ -164,9 +165,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
     int argc = _parseCommandLine(cmd_line, argv);
-
+    if (argc == 0) return nullptr;
     if (string(argv[0]).compare("chprompt") == 0) {
-      return new ChangePrompt(argv[1]);
+        if(argc == 1) return new ChangePrompt("");
+        return new ChangePrompt(argv[1]);
     }
 
     if (string(argv[0]).compare("showpid") == 0) {
