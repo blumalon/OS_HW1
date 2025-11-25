@@ -10,9 +10,14 @@
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
+    pid_t currentPID;
+    std::string cmdLine;
 
 public:
-    Command(const char *cmd_line);
+    explicit Command(const char *cmd_line , pid_t pid = -1) :
+    cmdLine(cmd_line), currentPID(pid) {};
+
+    pid_t getPid() const { return currentPID; }
 
     virtual ~Command();
 
@@ -27,8 +32,7 @@ class BuiltInCommand : public Command {
 public:
     explicit BuiltInCommand(const char *cmd_line);
 
-    virtual ~BuiltInCommand() {
-    }
+    virtual ~BuiltInCommand() {}
 };
 
 class ExternalCommand : public Command {

@@ -4,7 +4,7 @@
 #include <signal.h>
 #include "Commands.h"
 #include "signals.h"
-#include "JobList.h"
+
 
 int main(int argc, char *argv[]) {
     if (signal(SIGINT, ctrlCHandler) == SIG_ERR) {

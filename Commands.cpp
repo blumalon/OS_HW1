@@ -75,7 +75,7 @@ void _removeBackgroundSign(char *cmd_line) {
     // truncate the command line string up to the last non-space character
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
-/*
+
 void JobsList::removeJobById(int jobId) {
     for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
         if (i->getJobId() == jobId) {
@@ -131,12 +131,7 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
     pid_t pid = cmd->getPid();
     string cmdLine = cmd->getCmdLine();
-    int jobId = getNextJobID();
     JobEntry newJob;
-    newJob.setJobId(jobId);
-    newJob.setPid(pid);
-    newJob.setCommandLine(cmdLine);
-    newJob.setStopped(isStopped);
     jobsVector.push_back(newJob);
 }
 
@@ -148,7 +143,7 @@ void JobsList::printJobsList() {
                        job.getCommandLine()  + "\n";
     }
 }
-*/
+
 SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({})
 {
     // TODO: add your implementation
@@ -211,8 +206,6 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    // TODO: Add your implementation here
-    // for example:
     Command* cmd = CreateCommand(cmd_line);
     cmd->execute();
     // Please note that you must fork smash process for some commands (e.g., external commands....)
