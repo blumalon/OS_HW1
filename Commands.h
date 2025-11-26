@@ -17,6 +17,7 @@ public:
     explicit Command(const char *cmd_line , pid_t pid = -1) :
     cmdLine(cmd_line), currentPID(pid) {};
 
+    std::string getCmdLine() const { return cmdLine; }
     pid_t getPid() const { return currentPID; }
 
     virtual ~Command();
@@ -60,6 +61,7 @@ public:
 class PipeCommand : public Command {
     Command* firstCommand;
     Command* secondCommand;
+    bool am_i_with_AND;
 public:
     PipeCommand(const char *cmd_line);
 
@@ -282,20 +284,30 @@ private:
 
 public:
     char** getPreviousDirPtr() {return &previousDir;}
+
     void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
-    std::vector<std::pair<std::string, std::string>>& getAliasVector() {return aliasVector;}
+
+    std::vector<std::pair<std::string, std::string>>& getAliasVector()
+    {return aliasVector;}
+
     void printAlias();
+
     void addAlias(char** argv);
+
     Command *CreateCommand(const char *cmd_line);
 
     std::string getPrompt() const {
         return currentPrompt;
     }
+
     void setPrompt(std::string const & prompt) {
         currentPrompt = prompt;
     }
+
     SmallShell(SmallShell const &) = delete; // disable copy ctor
+
     void operator=(SmallShell const &) = delete; // disable = operator
+
     static SmallShell &getInstance() // make SmallShell singleton
     {
         static SmallShell instance; // Guaranteed to be destroyed.

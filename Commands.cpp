@@ -161,6 +161,12 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     char** argv = args;
     int argc = _parseCommandLine(cmd_line, argv);
     if (argc == 0) return nullptr;
+
+    for (const char &ch : string(cmd_line)) {
+        if (ch == '|') {
+            return new PipeCommand(cmd_line);
+        }
+    }
     if (string(argv[0]).compare("chprompt") == 0) {
         if(argc == 1) return new ChangePrompt("");
         return new ChangePrompt(argv[1]);
@@ -223,9 +229,6 @@ void ChangePrompt::execute(){
     else{
         smash.setPrompt("smash");
     }
-}
-
-Command::Command(const char *cmd_line) {
 }
 
 Command::~Command() = default;
@@ -420,6 +423,29 @@ void SysInfoCommand::execute()
 
 }
 
+PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
+    std::string s1, s2;
+    bool foundPipe = false;
+    bool found_AND_after_pipe = false;
+    for (const char &ch : std::string(cmd_line)) {
+        if (ch == '|') {
+            foundPipe = true;
+            continue;
+        }
+        if (foundPipe) {
+            if (ch == '&') {
+                found_AND_after_pipe = true;
+                continue;
+            }
+            s2 += ch;
+        }else {
+            s1 += ch;
+        }
+    }
+    firstCommand = SmallShell::getInstance().CreateCommand(s1.c_str());
+    secondCommand = SmallShell::getInstance().CreateCommand(s2.c_str());
+    am_i_with_AND = found_AND_after_pipe;
+}
 
 void PipeCommand::execute() {
 
