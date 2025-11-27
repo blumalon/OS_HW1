@@ -281,7 +281,7 @@ public:
     void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
     std::vector<std::pair<std::string, std::string>>& getAliasVector() {return aliasVector;}
     void printAlias();
-    void addAlias(char** argv);
+    void addAlias(char** argv, const char* cmd_line);
     Command *CreateCommand(const char *cmd_line);
 
     std::string getPrompt() const {

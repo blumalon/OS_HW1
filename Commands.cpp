@@ -165,7 +165,26 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
     int argc = _parseCommandLine(cmd_line, argv);
-    if (argc == 0) return nullptr;
+    if (_trim(string(cmd_line)).empty()) return nullptr;
+
+    for (auto& pair : this->aliasVector)
+    {
+        if (pair.first.compare(string(argv[0])) == 0)
+        {
+            string new_command_line = pair.second;
+            for (int i = 1; i < argc; ++i) {
+                new_command_line += " ";
+                new_command_line += argv[i];
+                free(argv[i]);
+            }
+            if (argv[0] != nullptr) free(argv[0]);
+            const char* new_command_line_ptr = new_command_line.c_str();
+            char* strPtr = strdup(new_command_line_ptr);
+            argc = _parseCommandLine(strPtr, argv);
+            break;
+        }
+    }
+
     if (string(argv[0]).compare("chprompt") == 0) {
         if(argc == 1) return new ChangePrompt("");
         return new ChangePrompt(argv[1]);
@@ -178,15 +197,18 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("pwd") == 0) {
         return new GetCurrDirCommand(cmd_line);
     }
-/*
+
     if (string(argv[0]).compare("cd") == 0) {
-        if(!argv[1])
+        if (argc > 2)
         {
-            char* pSecWord = &argv[1];
-            return new ChangeDirCommand(pSecWord);
+            cout << "smash error: cd: too many arguments" << endl;
+        }
+        else if (argv[1] != nullptr)
+        {
+            return new ChangeDirCommand(argv[1]);
         }
     }
-*/
+
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
     }
@@ -214,7 +236,12 @@ void SmallShell::executeCommand(const char *cmd_line) {
     // TODO: Add your implementation here
     // for example:
     Command* cmd = CreateCommand(cmd_line);
-    cmd->execute();
+    if (cmd)
+    {
+        cmd->execute();
+        delete cmd;
+        return;
+    }
     // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
 
@@ -245,6 +272,7 @@ ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
 }
 
 void ExternalCommand::execute() {
+
 }
 
 ShowPidCommand::ShowPidCommand(const char* cmd_line) : BuiltInCommand(""){
@@ -264,46 +292,34 @@ void GetCurrDirCommand::execute(){
     else cout << buffer << endl;
 }
 
-/*
-ChangeDirCommand::ChangeDirCommand(char* path, char** plastPwd) : BuiltInCommand("") , previousDir(plastPwd) , moveTo(path){
+
+ChangeDirCommand::ChangeDirCommand(char* path) : BuiltInCommand("") , moveTo(path){
 }
 
 void ChangeDirCommand::execute()
 {
-    char* old_cwd = getcwd(nullptr, 0);
-    if (!old_cwd) cout << "alocate error (add)" << endl;
-    if ((strcmp(moveTo,"-") == 0) && previousDir == nullptr)
+    SmallShell &smash = SmallShell::getInstance();
+    char* prevPath = *smash.getPreviousDirPtr();
+    if (!prevPath && string(moveTo).compare("-") == 0)
     {
         cout << "smash error: cd: OLDPWD not set" << endl;
-        free(old_cwd);
+        return;
     }
-    else if ((strcmp(moveTo,"-") == 0) && previousDir != nullptr)
+    char* old_cwd = getcwd(nullptr, 0);
+    if (!old_cwd) cout << "smash error: getcwd failed" << endl;
+    if (prevPath != nullptr && string(moveTo).compare("-") == 0)
     {
-        char* temp = *previousDir;
-        *this->previousDir = old_cwd;
-        old_cwd = temp;
-
-        if(chdir(moveTo) != 0)
-        {
-            perror("chdir failed");
-            if (strcmp(this->moveTo, "-") == 0) {
-                char* temp2 = *this->previousDir;
-                *this->previousDir = old_cwd;
-                free(temp2);
-            } else {
-                free(old_cwd);
-            }
-        }
-        else
-            {
-                if (strcmp(this->moveTo, "-") != 0) {
-                    free(*this->previousDir);
-                    *this->previousDir = old_cwd;
-                }
-            }
-        }
+        moveTo = prevPath;
+        smash.setPreviousDirPtr(old_cwd);
+        chdir(moveTo);
     }
-*/
+    else
+    {
+        smash.setPreviousDirPtr(old_cwd);
+        chdir(moveTo);
+    }
+}
+
 
 AliasCommand::AliasCommand(const char* cmd_line) : BuiltInCommand("")
 {
@@ -340,12 +356,15 @@ void AliasRemove(const std::string& Name)
     }
 }
 
-void SmallShell::addAlias(char** argv)
+void SmallShell::addAlias(char** argv, const char* cmd_line)
 {
-    int name_end = string(argv[1]).find_first_of('=');
-    string name = string(argv[1]).substr(0, name_end);
-    int command_length = string(argv[1]).length() - (name_end + 2);
-    string command_string = string(argv[1]).substr(name_end + 2, command_length - 1);
+    char* command_line = strdup(string(cmd_line).c_str());
+    int name_end = string(command_line).find('=');
+    int name_start = string(command_line).find_first_of(' ');
+    string name = string(command_line).substr(name_start + 1, name_end - name_start - 1);
+    size_t start_quote_pos = string(command_line).find('\'');
+    size_t end_quote_pos = string(command_line).rfind('\'');
+    string command_string = string(command_line).substr(start_quote_pos + 1, end_quote_pos - start_quote_pos - 1);
     if(!AliasExists(name))
     {
         this->aliasVector.push_back({name, command_string});
@@ -371,7 +390,7 @@ void AliasCommand::execute()
     const std::regex pattern("^alias [a-zA-Z0-9_]+='[^']*'$");
     if(std::regex_match(cmd_s, pattern))
     {
-        SmallShell::getInstance().addAlias(argv);
+        SmallShell::getInstance().addAlias(argv, cmd_line);
     }
     else
     {
@@ -424,13 +443,51 @@ SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
 
 void SysInfoCommand::execute()
 {
-
+    cout << "hello" << endl;
 }
 
 
 void PipeCommand::execute() {
 
 }
+/*
+UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
+{
 
+}
+
+void UnSetEnvCommand::execute()
+{
+    const char* raw_cmd_line = this->cmd_line;
+    char* args[COMMAND_MAX_ARGS];
+    char** argv = args;
+    int argc = 0;
+    argc = _parseCommandLine(raw_cmd_line, argv);
+    if (argc == 1)
+    {
+        cout << "smash error: unalias: not enough arguments" << endl;
+    }
+    else
+    {
+        int i = 1;
+        while(i < argc)
+        {
+            if(!AliasExists(std::string(argv[i])))
+            {
+                cout << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
+                return;
+            }
+            else
+            {
+                AliasRemove(std::string(argv[i]));
+            }
+            i++;
+        }
+    }
+    for (int i = 0; i < argc; ++i) {
+        free(argv[i]);
+    }
+}
+*/
 
 
