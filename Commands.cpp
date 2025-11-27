@@ -75,7 +75,7 @@ void _removeBackgroundSign(char *cmd_line) {
     // truncate the command line string up to the last non-space character
     cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
-/*
+
 void JobsList::removeJobById(int jobId) {
     for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
         if (i->getJobId() == jobId) {
@@ -131,12 +131,7 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
     pid_t pid = cmd->getPid();
     string cmdLine = cmd->getCmdLine();
-    int jobId = getNextJobID();
     JobEntry newJob;
-    newJob.setJobId(jobId);
-    newJob.setPid(pid);
-    newJob.setCommandLine(cmdLine);
-    newJob.setStopped(isStopped);
     jobsVector.push_back(newJob);
 }
 
@@ -148,7 +143,7 @@ void JobsList::printJobsList() {
                        job.getCommandLine()  + "\n";
     }
 }
-*/
+
 SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({})
 {
     // TODO: add your implementation
@@ -185,6 +180,13 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
 
+    if (argc == 0) return nullptr;
+
+    for (const char &ch : string(cmd_line)) {
+        if (ch == '|') {
+            return new PipeCommand(cmd_line);
+        }
+    }
     if (string(argv[0]).compare("chprompt") == 0) {
         if(argc == 1) return new ChangePrompt("");
         return new ChangePrompt(argv[1]);
@@ -233,8 +235,6 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    // TODO: Add your implementation here
-    // for example:
     Command* cmd = CreateCommand(cmd_line);
     if (cmd)
     {
@@ -257,9 +257,6 @@ void ChangePrompt::execute(){
     else{
         smash.setPrompt("smash");
     }
-}
-
-Command::Command(const char *cmd_line) {
 }
 
 Command::~Command() = default;
@@ -443,9 +440,32 @@ SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
 
 void SysInfoCommand::execute()
 {
-    cout << "hello" << endl;
+    cout << "to do" << endl;
 }
 
+PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
+    std::string s1, s2;
+    bool foundPipe = false;
+    bool found_AND_after_pipe = false;
+    for (const char &ch : std::string(cmd_line)) {
+        if (ch == '|') {
+            foundPipe = true;
+            continue;
+        }
+        if (foundPipe) {
+            if (ch == '&') {
+                found_AND_after_pipe = true;
+                continue;
+            }
+            s2 += ch;
+        }else {
+            s1 += ch;
+        }
+    }
+    firstCommand = SmallShell::getInstance().CreateCommand(s1.c_str());
+    secondCommand = SmallShell::getInstance().CreateCommand(s2.c_str());
+    am_i_with_AND = found_AND_after_pipe;
+}
 
 void PipeCommand::execute() {
 
