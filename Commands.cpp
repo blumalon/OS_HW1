@@ -441,7 +441,6 @@ SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
 void SysInfoCommand::execute()
 {
     cout << "To Do" << endl;
-
 }
 
 PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
