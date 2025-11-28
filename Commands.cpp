@@ -468,8 +468,43 @@ PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
 }
 
 void PipeCommand::execute() {
-
+    int my_pipe[2];
+    while (pipe(my_pipe) == -1) {}
+    pid_t pid1 = fork();
+    while (pid1 == -1) {
+        pid1 = fork();
+    }
+    if (pid1 == 0) { //the child proccess
+        close(my_pipe[0]); //close read end
+        int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
+        int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
+        while (dup_worked == -1) {
+            dup_worked = dup2(my_pipe[1], fd_to_write);
+        }
+        close(my_pipe[1]); //close write end of pipe
+        firstCommand->execute();
+        exit(0);
+    }
+    pid_t pid2 = fork();
+    while (pid2 == -1) {
+        pid2 = fork();
+    }
+    if (pid2 == 0) { //the second child proccess
+        close(my_pipe[1]); //close write end of pipe
+        int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
+        while (dup_worked == -1) {
+            dup_worked = dup2(my_pipe[0], 0);
+        }
+        close(my_pipe[0]); //close read end of pipe
+        secondCommand->execute();
+        exit(0);
+    }
+    close(my_pipe[0]);
+    close(my_pipe[1]);
+    waitpid(pid1, nullptr, 0);
+    waitpid(pid2, nullptr, 0);
 }
+
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
 {
