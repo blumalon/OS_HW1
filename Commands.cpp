@@ -2,6 +2,7 @@
 #include <string.h>
 #include <iostream>
 #include <vector>
+#include <fcntl.h>
 #include <sstream>
 #include <sys/wait.h>
 #include <iomanip>
@@ -77,9 +78,9 @@ void _removeBackgroundSign(char *cmd_line) {
 }
 
 void JobsList::removeJobById(int jobId) {
-    for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
-        if (i->getJobId() == jobId) {
-            jobsVector.erase(i);
+    for (unsigned int i = 0; i < jobsVector.size(); ++i) {
+        if (jobsVector[i].getJobId() == jobId) {
+            jobsVector.erase(jobsVector.begin() + i);
             return;
         }
     }
@@ -161,7 +162,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     char** argv = args;
     int argc = _parseCommandLine(cmd_line, argv);
     if (_trim(string(cmd_line)).empty()) return nullptr;
-
+    //NEED TO FIX/ YOU RUIN THE ORIGINAL CMDLINE THAT IS SUPPOSED TO BE SAVED////////
     for (auto& pair : this->aliasVector)
     {
         if (pair.first.compare(string(argv[0])) == 0)
@@ -179,7 +180,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             break;
         }
     }
-
+///////////////////////////////////////////////////////////////////////////////////////
     if (argc == 0) return nullptr;
 
     for (const char &ch : string(cmd_line)) {
@@ -211,8 +212,17 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
 
+    string line = cmd_line;
+    for (auto ch: line) {
+        if(ch == '|') {
+            return new PipeCommand(cmd_line);
+        }
+    }
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("whoami") == 0) {
+        return new WhoAmICommand(cmd_line);
     }
     if (string(argv[0]).compare("unalias") == 0) {
         return new UnAliasCommand(cmd_line);
@@ -504,6 +514,55 @@ void PipeCommand::execute() {
     waitpid(pid1, nullptr, 0);
     waitpid(pid2, nullptr, 0);
 }
+
+WhoAmICommand::WhoAmICommand(const char* cmd_line) : Command(cmd_line){}
+
+void WhoAmICommand::execute() {
+    uid_t my_uid = getuid();
+    gid_t my_gid = getgid();
+    std::string username = "idk";
+    std::string home_directory = "idk";
+    std::string lineBuff;
+    int fd = open("/etc/passwd", O_RDONLY);
+    if (fd == -1) {
+        throw runtime_error("Could not open /etc/passwd");
+    }
+    char ch;
+    std::vector<std::string> segments;
+    std::string current_segment;
+    while ((read(fd,&ch, 1) > 0)) {// read file char by char
+        if (ch != '\n') {// if not end of line
+            lineBuff += ch;
+        } else {
+            for (auto c : lineBuff) {// parse line into segments
+                if (c != ':') {          //seperated by ':'
+                    current_segment += c;
+                } else {
+                    segments.push_back(current_segment);
+                    current_segment.clear();
+                }
+            }
+            segments.push_back(current_segment);
+            if (segments.size() >= 6) {
+                int line_uid = stoi(segments[2]);
+                if (line_uid == my_uid) {
+                    username = segments[0];
+                    home_directory = segments[5];
+                    break;
+                }
+            }
+            lineBuff.clear();
+        }
+        current_segment.clear();
+        segments.clear();
+    }
+    std::cout << username <<  std::endl;
+    std::cout << my_uid << std::endl;
+    std::cout << my_gid <<  std::endl;
+    std::cout << home_directory <<  std::endl;
+    close (fd);
+}
+
 
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")

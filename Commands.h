@@ -162,8 +162,9 @@ public:
     class JobEntry {
         int jobId = 0;
         pid_t pid = -2;
-        const std::string commandLine;
+        std::string commandLine;
     public:
+        ~JobEntry() = default;
         int getJobId() const { return jobId; }
         pid_t getPid() const { return pid; }
         std::string getCommandLine() const { return commandLine; }
