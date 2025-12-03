@@ -23,6 +23,7 @@ public:
     virtual ~Command();
 
     virtual void execute() = 0;
+    void setPID(pid_t m_pid){currentPID = m_pid;}
 
     //virtual void prepare();
     //virtual void cleanup();
@@ -157,28 +158,37 @@ class QuitCommand : public BuiltInCommand {
 
 
 class JobsList {
-    int getNextJobID();
 public:
     class JobEntry {
         int jobId = 0;
         pid_t pid = -2;
         std::string commandLine;
     public:
+        JobEntry(pid_t m_pid):pid(m_pid){}
+        JobEntry();
         ~JobEntry() = default;
+        void set_jobID(int id){jobId = id;}
         int getJobId() const { return jobId; }
         pid_t getPid() const { return pid; }
         std::string getCommandLine() const { return commandLine; }
     };
-std::vector<JobEntry> jobsVector;
+    std::vector<JobEntry> jobsVector;
+    int getNextJobID();
 
-public:
-    JobsList();
+    JobsList() = default;
 
-    ~JobsList(){jobsVector.clear();};
+    int get_num_of_unfinished_jobs() {
+        removeFinishedJobs();
+        return jobsVector.size();
+    }
+
+    ~JobsList(){jobsVector.clear();}
 
     void addJob(Command *cmd, bool isStopped = false);
 
-    void printJobsList();
+    void printJobsList_forJOBS();
+
+    void printJobsList_forQUIT();
 
     void killAllJobs();
 
@@ -200,17 +210,6 @@ public:
     }
 };
 
-class JobsCommand : public BuiltInCommand {
-    JobsList *jobs;
-public:
-    JobsCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) {}
-
-    virtual ~JobsCommand();
-
-    void execute() override {
-        jobs->printJobsList();
-    }
-};
 
 class KillCommand : public BuiltInCommand {
     // TODO: Add your data members
@@ -281,6 +280,7 @@ private:
     std::string currentPrompt = "smash";
     char* previousDir;
     std::vector<std::pair<std::string, std::string>> aliasVector;
+    JobsList* m_job_list;
     SmallShell();
 
 public:
@@ -321,7 +321,19 @@ public:
 
     void executeCommand(const char *cmd_line);
 
-    // TODO: add extra methods as needed
+    JobsList* getJobList() {
+        return m_job_list;
+    }
 };
 
+class JobsCommand : public BuiltInCommand {
+public:
+    explicit JobsCommand(const char *cmd_line): BuiltInCommand(cmd_line){}
+
+    virtual ~JobsCommand() = default;
+
+    void execute() override {
+        SmallShell::getInstance().getJobList()->printJobsList_forJOBS();
+    }
+};
 #endif //SMASH_COMMAND_H_

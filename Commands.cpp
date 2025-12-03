@@ -130,29 +130,45 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
-    pid_t pid = cmd->getPid();
+    pid_t m_pid = cmd->getPid();
     string cmdLine = cmd->getCmdLine();
-    JobEntry newJob;
-    jobsVector.push_back(newJob);
+    JobEntry* newJob = new JobEntry(m_pid);
+    newJob->set_jobID(this->getNextJobID());
+    for (int i = 0; i< jobsVector.size(); i++) {
+        if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
+            jobsVector[i] = *newJob;
+        }
+    }
 }
 
-void JobsList::printJobsList() {
+void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
     string resault;
     for (const auto &job : jobsVector) {
         resault += "[" + std::to_string(job.getJobId()) + "] " +
                        job.getCommandLine()  + "\n";
     }
+    std::cout << resault << std::endl;
 }
+/*
+void JobsList::printJobsList_forQUIT() {
+    removeFinishedJobs();
+    string resault;
+    for (const auto &job : jobsVector) {
+        resault += "[" + std::to_string(job.getJobId()) + "] " +
+                       job.getCommandLine()  + "\n";
+    }
+    std::cout << resault << std::endl;
+}
+*/
 
-SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({})
-{
-    // TODO: add your implementation
-}
+SmallShell::SmallShell() :
+previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()){}
 
 SmallShell::~SmallShell() {
-    // TODO: add your implementation
+    delete m_job_list;
 }
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -195,6 +211,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
     if (string(argv[0]).compare("showpid") == 0) {
       return new ShowPidCommand(cmd_line);
+    }
+
+    if (string(argv[0]).compare("jobs") == 0) {
+        return new JobsCommand(cmd_line);
     }
 
     if (string(argv[0]).compare("pwd") == 0) {
@@ -492,6 +512,8 @@ void PipeCommand::execute() {
             dup_worked = dup2(my_pipe[1], fd_to_write);
         }
         close(my_pipe[1]); //close write end of pipe
+        firstCommand->setPID(getppid());
+        SmallShell::getInstance().getJobList()->addJob(firstCommand, 0);
         firstCommand->execute();
         exit(0);
     }
@@ -506,6 +528,8 @@ void PipeCommand::execute() {
             dup_worked = dup2(my_pipe[0], 0);
         }
         close(my_pipe[0]); //close read end of pipe
+        secondCommand->setPID(getppid());
+        SmallShell::getInstance().getJobList()->addJob(secondCommand, 0);
         secondCommand->execute();
         exit(0);
     }
@@ -544,7 +568,7 @@ void WhoAmICommand::execute() {
             }
             segments.push_back(current_segment);
             if (segments.size() >= 6) {
-                int line_uid = stoi(segments[2]);
+                unsigned int line_uid = stoi(segments[2]);
                 if (line_uid == my_uid) {
                     username = segments[0];
                     home_directory = segments[5];
