@@ -12,12 +12,12 @@
 class Command {
     pid_t currentPID;
     std::string cmdLine;
-
 public:
     explicit Command(const char *cmd_line , pid_t pid = -1) :
     cmdLine(cmd_line), currentPID(pid) {};
 
     std::string getCmdLine() const { return cmdLine; }
+
     pid_t getPid() const { return currentPID; }
 
     virtual ~Command();
@@ -38,6 +38,8 @@ public:
 };
 
 class ExternalCommand : public Command {
+    bool am_i_complex = false;
+    bool am_i_in_background = false;
 public:
     ExternalCommand(const char *cmd_line);
 
@@ -212,7 +214,7 @@ public:
 
 
 class KillCommand : public BuiltInCommand {
-    // TODO: Add your data members
+
 public:
     KillCommand(const char *cmd_line, JobsList *jobs);
 
@@ -223,7 +225,7 @@ public:
 };
 
 class ForegroundCommand : public BuiltInCommand {
-    // TODO: Add your data members
+
 public:
     ForegroundCommand(const char *cmd_line, JobsList *jobs);
 

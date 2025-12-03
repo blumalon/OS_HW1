@@ -295,12 +295,64 @@ BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-
+    bool end_of_task = true;
+    for (auto ch&: cmd_line) {
+        if (ch != WHITESPACE) {
+            end_of_task = false;
+        }
+        if (ch == '*' || ch == '?')
+            am_i_complex = true;
+        if (end_of_task && ch == '&')
+            am_i_in_background = true;
+        end_of_task = true;
+    }
+    if (am_i_in_background) {
+        _removeBackgroundSign((char*)cmd_line);
+    }
 }
 
 void ExternalCommand::execute() {
-
+    unsigned int ssize = this->getCmdLine().size() + 1;
+    char* cpy_line = (char*)malloc(ssize * sizeof(char));
+   for (int i = 0; i < ssize - 1; i++) {
+       cpy_line[i] = this->getCmdLine()[i];
+   }
+    cpy_line[ssize - 1] = '\0';
+    pid_t pid1 = fork();
+    if (pid1 == -1) {
+        free(cpy_line);
+        return;
+    }
+    if (pid1 == 0) { // child proccess
+        if (am_i_complex) {
+            char bash_path[] = "/bin/bash";
+            char flag[] = "-c";
+            char* args[] = { bash_path, flag, cpy_line, nullptr };
+            execv(bash_path, args);
+            exit(1); // if we got here, the execv FAILED
+        } else {
+            char* bash_args[20]; // Assuming max 20 args per requirements
+            int i = 0;
+            char* token = strtok(cpy_line, " \t\n");
+            while (token != nullptr && i < 19) {
+                bash_args[i++] = token;
+                token = strtok(nullptr, " \t\n");
+            }
+            bash_args[i] = nullptr;
+            execvp(bash_args[0], bash_args);
+            exit(1);
+        }
+    } else {//parent proccess
+        free(cpy_line);
+        if (am_i_in_background) {
+            SmallShell::getInstance().getJobList()->addJob(this, pid1);
+        }
+        else {
+            waitpid(pid1, nullptr, 0);
+        }
+    }
 }
+
 
 ShowPidCommand::ShowPidCommand(const char* cmd_line) : BuiltInCommand(""){
 
@@ -624,8 +676,4 @@ void UnSetEnvCommand::execute()
     }
     for (int i = 0; i < argc; ++i) {
         free(argv[i]);
-    }
-}
-*/
-
-
+        }*/
