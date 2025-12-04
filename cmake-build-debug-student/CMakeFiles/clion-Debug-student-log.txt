@@ -1,0 +1,4 @@
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_CXX_FLAGS=-Wall -pedantic-errors -Werror" -G "CodeBlocks - Unix Makefiles" /tmp/OS_HW1
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/OS_HW1/cmake-build-debug-student

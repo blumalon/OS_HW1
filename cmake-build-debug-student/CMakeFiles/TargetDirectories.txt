@@ -1,0 +1,3 @@
+/tmp/OS_HW1/cmake-build-debug-student/CMakeFiles/rebuild_cache.dir
+/tmp/OS_HW1/cmake-build-debug-student/CMakeFiles/skeleton_smash.dir
+/tmp/OS_HW1/cmake-build-debug-student/CMakeFiles/edit_cache.dir
