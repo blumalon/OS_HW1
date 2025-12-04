@@ -129,9 +129,9 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
-    pid_t pid = cmd->getPid();
-    string cmdLine = cmd->getCmdLine();
-    JobEntry newJob;
+    //pid_t pid = cmd->getPid();
+    //string cmdLine = cmd->getCmdLine();
+    JobEntry newJob; //JobEntry newJob = new JobEntry(pid, cmdLine);
     jobsVector.push_back(newJob);
 }
 

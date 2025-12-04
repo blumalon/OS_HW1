@@ -15,7 +15,7 @@ class Command {
 
 public:
     explicit Command(const char *cmd_line , pid_t pid = -1) :
-    cmdLine(cmd_line), currentPID(pid) {};
+     currentPID(pid) , cmdLine(cmd_line) {}
 
     std::string getCmdLine() const { return cmdLine; }
     pid_t getPid() const { return currentPID; }
