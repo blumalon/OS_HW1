@@ -241,7 +241,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("cd") == 0) {
         if (argc > 2)
         {
-            cout << "smash error: cd: too many arguments" << endl;
+            cerr << "smash error: cd: too many arguments" << endl;
         }
         else if (argv[1] != nullptr)
         {
@@ -257,6 +257,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("kill") == 0) {
+        return new KillCommand(cmd_line, m_job_list);
     }
     if (string(argv[0]).compare("whoami") == 0) {
         return new WhoAmICommand(cmd_line);
