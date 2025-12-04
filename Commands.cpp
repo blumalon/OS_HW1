@@ -177,6 +177,11 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     }
 }
 
+void JobsList::killAllJobs() {
+ this->send_SIGKILL_to_all_jobs();
+}
+
+
 void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
     string resault;
