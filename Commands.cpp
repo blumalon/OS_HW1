@@ -134,7 +134,7 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     string cmdLine = cmd->getCmdLine();
     JobEntry* newJob = new JobEntry(m_pid);
     newJob->set_jobID(this->getNextJobID());
-    for (int i = 0; i< jobsVector.size(); i++) {
+    for (unsigned int i = 0; i< jobsVector.size(); i++) {
         if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
             jobsVector[i] = *newJob;
         }
@@ -153,6 +153,8 @@ void JobsList::printJobsList_forJOBS() {
 /*
 void JobsList::printJobsList_forQUIT() {
     removeFinishedJobs();
+    cout << "smash: sending SIGKILL signal to " << this->jobsVector.size() << " jobs:" << endl;
+
     string resault;
     for (const auto &job : jobsVector) {
         resault += "[" + std::to_string(job.getJobId()) + "] " +
@@ -294,9 +296,9 @@ Command::~Command() = default;
 BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
 
-ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
+ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {/*
     bool end_of_task = true;
-    for (auto ch&: cmd_line) {
+    for (auto& ch : cmd_line) {
         if (ch != WHITESPACE) {
             end_of_task = false;
         }
@@ -308,13 +310,13 @@ ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     }
     if (am_i_in_background) {
         _removeBackgroundSign((char*)cmd_line);
-    }
+    }*/
 }
 
 void ExternalCommand::execute() {
     unsigned int ssize = this->getCmdLine().size() + 1;
     char* cpy_line = (char*)malloc(ssize * sizeof(char));
-   for (int i = 0; i < ssize - 1; i++) {
+   for (unsigned int i = 0; i < ssize - 1; i++) {
        cpy_line[i] = this->getCmdLine()[i];
    }
     cpy_line[ssize - 1] = '\0';
