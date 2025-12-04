@@ -98,7 +98,7 @@ void _removeBackgroundSign(char *cmd_line) {
 
 void JobsList::removeJobById(int jobId) {
     for (unsigned int i = 0; i < jobsVector.size(); ++i) {
-        if (jobsVector[i].getJobId() == jobId) {
+        if (jobsVector[i]->getJobId() == jobId) {
             jobsVector.erase(jobsVector.begin() + i);
             return;
         }
@@ -109,7 +109,7 @@ void JobsList::removeFinishedJobs() {
     auto it = jobsVector.begin();
 
     while (it != jobsVector.end()) {
-        pid_t pid = it->getPid();
+        pid_t pid = it.operator*()->getPid();
         int status;
 
         pid_t result = waitpid(pid, &status, WNOHANG);
@@ -130,8 +130,8 @@ int JobsList::getNextJobID() {
     removeFinishedJobs();
     int maxId = 0;
     for (const auto &job : jobsVector) {
-        if (job.getJobId() > maxId) {
-            maxId = job.getJobId();
+        if (job->getJobId() > maxId) {
+            maxId = job->getJobId();
         }
     }
     return maxId + 1;
@@ -139,7 +139,7 @@ int JobsList::getNextJobID() {
 
 void JobsList::send_SIGKILL_to_all_jobs() {
     for (auto &job: jobsVector) {
-        kill(job.getPid(), SIGKILL);
+        kill(job->getPid(), SIGKILL);
     }
 }
 
@@ -147,19 +147,18 @@ void JobsList::send_SIGKILL_to_all_jobs() {
 bool JobsList::is_there_a_job_with_pid(const int pid) {
     removeFinishedJobs();
     for (const auto &job : jobsVector) {
-        if (job.getPid() == pid) {
+        if (job->getPid() == pid) {
             return true;
         }
     }
     return false;
 }
 
-
-JobsList::JobEntry *JobsList::getJobById(int jobId) {
+JobsList::JobEntry* JobsList::getJobById(int jobId) {
     removeFinishedJobs();
-    for (auto job: jobsVector) {
-        if (job.getJobId() == jobId)
-            return &job;
+    for (JobEntry* job: jobsVector) {
+        if (job->getJobId() == jobId)
+            return job;
     }
     return nullptr;
 }
@@ -172,8 +171,8 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     JobEntry* newJob = new JobEntry(m_pid);
     newJob->set_jobID(this->getNextJobID());
     for (unsigned int i = 0; i < jobsVector.size(); i++) {
-        if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
-            jobsVector[i] = *newJob;
+        if (jobsVector[i]->getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
+            jobsVector[i] = newJob;
         }
     }
 }
@@ -182,8 +181,8 @@ void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
     string resault;
     for (const auto &job : jobsVector) {
-        resault += "[" + std::to_string(job.getJobId()) + "] " +
-                       job.getCommandLine()  + "\n";
+        resault += "[" + std::to_string(job->getJobId()) + "] " +
+                       job->getCommandLine()  + "\n";
     }
     std::cout << resault << std::endl;
 }
@@ -192,8 +191,8 @@ void JobsList::printJobsList_forQUIT() {
     cout << "smash: sending SIGKILL signal to " << get_num_of_unfinished_jobs() << " jobs:" << endl;
     string resault;
     for (const auto &job : jobsVector) {
-        resault += std::to_string(job.getJobId()) + ": " +
-                       job.getCommandLine()  + "\n";
+        resault += std::to_string(job->getJobId()) + ": " +
+                       job->getCommandLine()  + "\n";
     }
     std::cout << resault << std::endl;
     killAllJobs();

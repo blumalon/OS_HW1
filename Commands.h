@@ -189,7 +189,7 @@ public:
         pid_t getPid() const { return pid; }
         std::string getCommandLine() const { return commandLine; }
     };
-    std::vector<JobEntry> jobsVector;
+    std::vector<JobEntry*> jobsVector;
     int getNextJobID();
 
     JobsList() = default;
@@ -213,7 +213,7 @@ public:
 
     void send_SIGKILL_to_all_jobs();
 
-    JobEntry *getJobById(int jobId);
+    JobEntry* getJobById(int jobId);
 
     void removeJobById(int jobId);
 
