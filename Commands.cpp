@@ -54,6 +54,24 @@ int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_EXIT()
 }
 
+void handler_ctr_C(int sig = SIGINT) {
+    cout << "smash: got ctrl-C" << endl;
+    if (SmallShell::getInstance().pid_of_foreGround == -10)
+        return;
+    pid_t is_foreGround = waitpid(SmallShell::getInstance().pid_of_foreGround,
+        nullptr, WNOHANG);
+    if (!is_foreGround) {
+        if (!kill(SmallShell::getInstance().pid_of_foreGround, SIGINT)) {
+            cout << "smash: process " << SmallShell::getInstance().pid_of_foreGround <<" was killed" << endl;
+        } else {
+            cerr << "smash error: kill failed"<<endl;
+        }
+    }
+    else {
+        SmallShell::getInstance().pid_of_foreGround = -10;
+    }
+}
+
 bool _isBackgroundComamnd(const char *cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
@@ -180,7 +198,9 @@ void JobsList::printJobsList_forQUIT() {
 */
 
 SmallShell::SmallShell() :
-previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()){}
+previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()) {
+    signal(SIGINT, handler_ctr_C);
+}
 
 SmallShell::~SmallShell() {
     delete m_job_list;
@@ -414,6 +434,7 @@ void ExternalCommand::execute() {
             SmallShell::getInstance().getJobList()->addJob(this, pid1);
         }
         else {
+            SmallShell::getInstance().pid_of_foreGround = pid1;
             waitpid(pid1, nullptr, 0);
         }
     }

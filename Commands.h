@@ -291,6 +291,9 @@ private:
     SmallShell();
 
 public:
+
+    pid_t pid_of_foreGround = -10;
+
     char** getPreviousDirPtr() {return &previousDir;}
 
     void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
