@@ -181,7 +181,7 @@ public:
         pid_t pid = -2;
         std::string commandLine;
     public:
-        JobEntry(pid_t m_pid):pid(m_pid){}
+        JobEntry(pid_t m_pid, std::string line):pid(m_pid), commandLine(line){}
         JobEntry();
         ~JobEntry() = default;
         void set_jobID(int id){jobId = id;}

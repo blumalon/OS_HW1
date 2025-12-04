@@ -55,23 +55,6 @@ int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_EXIT()
 }
 
-void handler_ctr_C(int sig = SIGINT) {
-    cout << "smash: got ctrl-C" << endl;
-    if (SmallShell::getInstance().pid_of_foreGround == -10)
-        return;
-    pid_t is_foreGround = waitpid(SmallShell::getInstance().pid_of_foreGround,
-        nullptr, WNOHANG);
-    if (!is_foreGround) {
-        if (!kill(SmallShell::getInstance().pid_of_foreGround, SIGINT)) {
-            cout << "smash: process " << SmallShell::getInstance().pid_of_foreGround <<" was killed" << endl;
-        } else {
-            cerr << "smash error: kill failed"<<endl;
-        }
-    }
-    else {
-        SmallShell::getInstance().pid_of_foreGround = -10;
-    }
-}
 
 bool _isBackgroundComamnd(const char *cmd_line) {
     const string str(cmd_line);
@@ -168,14 +151,12 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
     pid_t m_pid = cmd->getPid();
     string cmdLine = cmd->getCmdLine();
-    JobEntry* newJob = new JobEntry(m_pid);
+    JobEntry* newJob = new JobEntry(m_pid, cmdLine);
     newJob->set_jobID(this->getNextJobID());
-    for (unsigned int i = 0; i < jobsVector.size(); i++) {
-        if (jobsVector[i]->getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
-            jobsVector[i] = newJob;
-        }
-    }
+    jobsVector.push_back(newJob);
+   // cout << "added: "<< newJob->getCommandLine() << endl;
 }
+
 
 void JobsList::killAllJobs() {
  this->send_SIGKILL_to_all_jobs();
@@ -188,6 +169,7 @@ void JobsList::printJobsList_forJOBS() {
     for (const auto &job : jobsVector) {
         resault += "[" + std::to_string(job->getJobId()) + "] " +
                        job->getCommandLine()  + "\n";
+       // std::cout << job->getCommandLine() << endl;
     }
     std::cout << resault << std::endl;
 }
@@ -207,7 +189,6 @@ void JobsList::printJobsList_forQUIT() {
 
 SmallShell::SmallShell() :
 previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()) {
-    signal(SIGINT, handler_ctr_C);
 }
 
 SmallShell::~SmallShell() {
@@ -407,6 +388,10 @@ ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     }
     if (am_i_in_background) {
         _removeBackgroundSign((char*)cmd_line);
+        for (auto &c : cmdLine) {
+            if (c == '&')
+                c = ' ';
+        }
     }
 }
 
@@ -423,6 +408,7 @@ void ExternalCommand::execute() {
         return;
     }
     if (pid1 == 0) { // child proccess
+        setpgrp();
         if (am_i_complex) {
             char bash_path[] = "/bin/bash";
             char flag[] = "-c";
@@ -709,6 +695,7 @@ void PipeCommand::execute() {
     }
     if (pid1 == 0) { //the child proccess
         close(my_pipe[0]); //close read end
+        setpgrp();
         int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
         int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
         while (dup_worked == -1) {
@@ -726,6 +713,7 @@ void PipeCommand::execute() {
     }
     if (pid2 == 0) { //the second child proccess
         close(my_pipe[1]); //close write end of pipe
+        setpgrp();
         int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
         while (dup_worked == -1) {
             dup_worked = dup2(my_pipe[0], 0);
