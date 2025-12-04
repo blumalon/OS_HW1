@@ -2,6 +2,7 @@
 #include <string.h>
 #include <iostream>
 #include <vector>
+#include <fcntl.h>
 #include <sstream>
 #include <sys/wait.h>
 #include <iomanip>
@@ -77,9 +78,9 @@ void _removeBackgroundSign(char *cmd_line) {
 }
 
 void JobsList::removeJobById(int jobId) {
-    for (vector<JobEntry>::iterator i = jobsVector.begin(); i != jobsVector.end(); ++i) {
-        if (i->getJobId() == jobId) {
-            jobsVector.erase(i);
+    for (unsigned int i = 0; i < jobsVector.size(); ++i) {
+        if (jobsVector[i].getJobId() == jobId) {
+            jobsVector.erase(jobsVector.begin() + i);
             return;
         }
     }
@@ -129,29 +130,45 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
-    //pid_t pid = cmd->getPid();
-    //string cmdLine = cmd->getCmdLine();
-    JobEntry newJob; //JobEntry newJob = new JobEntry(pid, cmdLine);
-    jobsVector.push_back(newJob);
+    pid_t m_pid = cmd->getPid();
+    string cmdLine = cmd->getCmdLine();
+    JobEntry* newJob = new JobEntry(m_pid);
+    newJob->set_jobID(this->getNextJobID());
+    for (int i = 0; i< jobsVector.size(); i++) {
+        if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
+            jobsVector[i] = *newJob;
+        }
+    }
 }
 
-void JobsList::printJobsList() {
+void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
     string resault;
     for (const auto &job : jobsVector) {
         resault += "[" + std::to_string(job.getJobId()) + "] " +
                        job.getCommandLine()  + "\n";
     }
+    std::cout << resault << std::endl;
 }
+/*
+void JobsList::printJobsList_forQUIT() {
+    removeFinishedJobs();
+    string resault;
+    for (const auto &job : jobsVector) {
+        resault += "[" + std::to_string(job.getJobId()) + "] " +
+                       job.getCommandLine()  + "\n";
+    }
+    std::cout << resault << std::endl;
+}
+*/
 
-SmallShell::SmallShell() : previousDir(nullptr) , aliasVector({})
-{
-    // TODO: add your implementation
-}
+SmallShell::SmallShell() :
+previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()){}
 
 SmallShell::~SmallShell() {
-    // TODO: add your implementation
+    delete m_job_list;
 }
+
 
 /**
 * Creates and returns a pointer to Command class which matches the given command line (cmd_line)
@@ -161,7 +178,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     char** argv = args;
     int argc = _parseCommandLine(cmd_line, argv);
     if (_trim(string(cmd_line)).empty()) return nullptr;
-
+    //NEED TO FIX/ YOU RUIN THE ORIGINAL CMDLINE THAT IS SUPPOSED TO BE SAVED////////
     for (auto& pair : this->aliasVector)
     {
         if (pair.first.compare(string(argv[0])) == 0)
@@ -179,7 +196,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             break;
         }
     }
-
+///////////////////////////////////////////////////////////////////////////////////////
     if (argc == 0) return nullptr;
 
     for (const char &ch : string(cmd_line)) {
@@ -194,6 +211,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
     if (string(argv[0]).compare("showpid") == 0) {
       return new ShowPidCommand(cmd_line);
+    }
+
+    if (string(argv[0]).compare("jobs") == 0) {
+        return new JobsCommand(cmd_line);
     }
 
     if (string(argv[0]).compare("pwd") == 0) {
@@ -211,8 +232,17 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
 
+    string line = cmd_line;
+    for (auto ch: line) {
+        if(ch == '|') {
+            return new PipeCommand(cmd_line);
+        }
+    }
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("whoami") == 0) {
+        return new WhoAmICommand(cmd_line);
     }
     if (string(argv[0]).compare("unalias") == 0) {
         return new UnAliasCommand(cmd_line);
@@ -265,12 +295,64 @@ BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-
+    bool end_of_task = true;
+    for (auto ch&: cmd_line) {
+        if (ch != WHITESPACE) {
+            end_of_task = false;
+        }
+        if (ch == '*' || ch == '?')
+            am_i_complex = true;
+        if (end_of_task && ch == '&')
+            am_i_in_background = true;
+        end_of_task = true;
+    }
+    if (am_i_in_background) {
+        _removeBackgroundSign((char*)cmd_line);
+    }
 }
 
 void ExternalCommand::execute() {
-
+    unsigned int ssize = this->getCmdLine().size() + 1;
+    char* cpy_line = (char*)malloc(ssize * sizeof(char));
+   for (int i = 0; i < ssize - 1; i++) {
+       cpy_line[i] = this->getCmdLine()[i];
+   }
+    cpy_line[ssize - 1] = '\0';
+    pid_t pid1 = fork();
+    if (pid1 == -1) {
+        free(cpy_line);
+        return;
+    }
+    if (pid1 == 0) { // child proccess
+        if (am_i_complex) {
+            char bash_path[] = "/bin/bash";
+            char flag[] = "-c";
+            char* args[] = { bash_path, flag, cpy_line, nullptr };
+            execv(bash_path, args);
+            exit(1); // if we got here, the execv FAILED
+        } else {
+            char* bash_args[20]; // Assuming max 20 args per requirements
+            int i = 0;
+            char* token = strtok(cpy_line, " \t\n");
+            while (token != nullptr && i < 19) {
+                bash_args[i++] = token;
+                token = strtok(nullptr, " \t\n");
+            }
+            bash_args[i] = nullptr;
+            execvp(bash_args[0], bash_args);
+            exit(1);
+        }
+    } else {//parent proccess
+        free(cpy_line);
+        if (am_i_in_background) {
+            SmallShell::getInstance().getJobList()->addJob(this, pid1);
+        }
+        else {
+            waitpid(pid1, nullptr, 0);
+        }
+    }
 }
+
 
 ShowPidCommand::ShowPidCommand(const char* cmd_line) : BuiltInCommand(""){
 
@@ -468,8 +550,96 @@ PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
 }
 
 void PipeCommand::execute() {
-
+    int my_pipe[2];
+    while (pipe(my_pipe) == -1) {}
+    pid_t pid1 = fork();
+    while (pid1 == -1) {
+        pid1 = fork();
+    }
+    if (pid1 == 0) { //the child proccess
+        close(my_pipe[0]); //close read end
+        int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
+        int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
+        while (dup_worked == -1) {
+            dup_worked = dup2(my_pipe[1], fd_to_write);
+        }
+        close(my_pipe[1]); //close write end of pipe
+        firstCommand->setPID(getppid());
+        SmallShell::getInstance().getJobList()->addJob(firstCommand, 0);
+        firstCommand->execute();
+        exit(0);
+    }
+    pid_t pid2 = fork();
+    while (pid2 == -1) {
+        pid2 = fork();
+    }
+    if (pid2 == 0) { //the second child proccess
+        close(my_pipe[1]); //close write end of pipe
+        int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
+        while (dup_worked == -1) {
+            dup_worked = dup2(my_pipe[0], 0);
+        }
+        close(my_pipe[0]); //close read end of pipe
+        secondCommand->setPID(getppid());
+        SmallShell::getInstance().getJobList()->addJob(secondCommand, 0);
+        secondCommand->execute();
+        exit(0);
+    }
+    close(my_pipe[0]);
+    close(my_pipe[1]);
+    waitpid(pid1, nullptr, 0);
+    waitpid(pid2, nullptr, 0);
 }
+
+WhoAmICommand::WhoAmICommand(const char* cmd_line) : Command(cmd_line){}
+
+void WhoAmICommand::execute() {
+    uid_t my_uid = getuid();
+    gid_t my_gid = getgid();
+    std::string username = "idk";
+    std::string home_directory = "idk";
+    std::string lineBuff;
+    int fd = open("/etc/passwd", O_RDONLY);
+    if (fd == -1) {
+        throw runtime_error("Could not open /etc/passwd");
+    }
+    char ch;
+    std::vector<std::string> segments;
+    std::string current_segment;
+    while ((read(fd,&ch, 1) > 0)) {// read file char by char
+        if (ch != '\n') {// if not end of line
+            lineBuff += ch;
+        } else {
+            for (auto c : lineBuff) {// parse line into segments
+                if (c != ':') {          //seperated by ':'
+                    current_segment += c;
+                } else {
+                    segments.push_back(current_segment);
+                    current_segment.clear();
+                }
+            }
+            segments.push_back(current_segment);
+            if (segments.size() >= 6) {
+                unsigned int line_uid = stoi(segments[2]);
+                if (line_uid == my_uid) {
+                    username = segments[0];
+                    home_directory = segments[5];
+                    break;
+                }
+            }
+            lineBuff.clear();
+        }
+        current_segment.clear();
+        segments.clear();
+    }
+    std::cout << username <<  std::endl;
+    std::cout << my_uid << std::endl;
+    std::cout << my_gid <<  std::endl;
+    std::cout << home_directory <<  std::endl;
+    close (fd);
+}
+
+
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
 {
@@ -506,8 +676,4 @@ void UnSetEnvCommand::execute()
     }
     for (int i = 0; i < argc; ++i) {
         free(argv[i]);
-    }
-}
-*/
-
-
+        }*/
