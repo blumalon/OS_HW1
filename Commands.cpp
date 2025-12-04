@@ -134,7 +134,7 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     string cmdLine = cmd->getCmdLine();
     JobEntry* newJob = new JobEntry(m_pid);
     newJob->set_jobID(this->getNextJobID());
-    for (int i = 0; i< jobsVector.size(); i++) {
+    for (unsigned int i = 0; i < jobsVector.size(); i++) {
         if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
             jobsVector[i] = *newJob;
         }
@@ -296,8 +296,9 @@ BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     bool end_of_task = true;
-    for (auto ch&: cmd_line) {
-        if (ch != WHITESPACE) {
+    std::string to_check = std::string(cmd_line);
+    for (auto ch: to_check) {
+        if (WHITESPACE.find(ch) == false) {
             end_of_task = false;
         }
         if (ch == '*' || ch == '?')
@@ -314,7 +315,7 @@ ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
 void ExternalCommand::execute() {
     unsigned int ssize = this->getCmdLine().size() + 1;
     char* cpy_line = (char*)malloc(ssize * sizeof(char));
-   for (int i = 0; i < ssize - 1; i++) {
+   for (unsigned int i = 0; i < ssize - 1; i++) {
        cpy_line[i] = this->getCmdLine()[i];
    }
     cpy_line[ssize - 1] = '\0';
