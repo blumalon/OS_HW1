@@ -149,9 +149,10 @@ public:
 class JobsList;
 
 class QuitCommand : public BuiltInCommand {
-
-    QuitCommand(const char *cmd_line, JobsList *jobs);
-
+public:
+    QuitCommand(const char *cmd_line, JobsList *jobs, bool isKill);
+    bool isKill;
+    JobsList* jobs;
     virtual ~QuitCommand() {
     }
 

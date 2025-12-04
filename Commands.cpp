@@ -24,6 +24,7 @@ const std::string WHITESPACE = " \n\r\t\f\v";
 #else
 #define FUNC_ENTRY()
 #define FUNC_EXIT()
+#define SYSINFO_BUFFER_SIZE 2048
 #endif
 
 string _ltrim(const std::string &s) {
@@ -134,7 +135,7 @@ void JobsList::addJob(Command *cmd, bool isStopped) {
     string cmdLine = cmd->getCmdLine();
     JobEntry* newJob = new JobEntry(m_pid);
     newJob->set_jobID(this->getNextJobID());
-    for (unsigned int i = 0; i< jobsVector.size(); i++) {
+    for (unsigned int i = 0; i < jobsVector.size(); i++) {
         if (jobsVector[i].getPid() == -2 || (jobsVector.begin() + i) == jobsVector.end()) {
             jobsVector[i] = *newJob;
         }
@@ -150,19 +151,19 @@ void JobsList::printJobsList_forJOBS() {
     }
     std::cout << resault << std::endl;
 }
-/*
-void JobsList::printJobsList_forQUIT() {
-    removeFinishedJobs();
-    cout << "smash: sending SIGKILL signal to " << this->jobsVector.size() << " jobs:" << endl;
 
+void JobsList::printJobsList_forQUIT() {
+    cout << "smash: sending SIGKILL signal to " << get_num_of_unfinished_jobs() << " jobs:" << endl;
     string resault;
     for (const auto &job : jobsVector) {
-        resault += "[" + std::to_string(job.getJobId()) + "] " +
+        resault += std::to_string(job.getJobId()) + ": " +
                        job.getCommandLine()  + "\n";
     }
     std::cout << resault << std::endl;
+    killAllJobs();
+    exit(0);
 }
-*/
+
 
 SmallShell::SmallShell() :
 previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()){}
@@ -252,6 +253,11 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("sysinfo") == 0) {
         return new SysInfoCommand(cmd_line);
     }
+    if (string(argv[0]).compare("quit") == 0) {
+        if(argv[1] && string(argv[1]).compare("kill") == 0)
+            return new QuitCommand(cmd_line, this->m_job_list, true);
+        return new QuitCommand(cmd_line, this->m_job_list, false);
+    }
     // For example:
     /*
 
@@ -296,10 +302,11 @@ Command::~Command() = default;
 BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
 
-ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {/*
+ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     bool end_of_task = true;
-    for (auto& ch : cmd_line) {
-        if (ch != WHITESPACE) {
+    std::string to_check = std::string(cmd_line);
+    for (auto ch: to_check) {
+        if (WHITESPACE.find(ch) == false) {
             end_of_task = false;
         }
         if (ch == '*' || ch == '?')
@@ -310,7 +317,7 @@ ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {/*
     }
     if (am_i_in_background) {
         _removeBackgroundSign((char*)cmd_line);
-    }*/
+    }
 }
 
 void ExternalCommand::execute() {
@@ -522,10 +529,61 @@ SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
 
 }
 
+string get_kernel_release()
+{
+    char buffer[SYSINFO_BUFFER_SIZE];
+    int fd = open("/proc/sys/kernel/osrelease", O_RDONLY);
+    if (fd == -1) {
+        std::cerr << "smash error: open failed on " << "/proc/sys/kernel/osrelease" << std::endl;
+    }
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+    }
+    close(fd);
+    string word = strtok(buffer, WHITESPACE.c_str());
+    return word;
+}
+string get_system_type()
+{
+    char buffer[SYSINFO_BUFFER_SIZE];
+    int fd = open("/proc/version", O_RDONLY);
+    if (fd == -1) {
+        std::cerr << "smash error: open failed on " << "/proc/version " << std::endl;
+    }
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+    }
+    close(fd);
+    string word = strtok(buffer, WHITESPACE.c_str());
+    return word;
+}
+string get_hostname()
+{
+    char buffer[SYSINFO_BUFFER_SIZE];
+    int fd = open("/proc/sys/kernel/hostname", O_RDONLY);
+    if (fd == -1) {
+        std::cerr << "smash error: open failed on " << "/proc/sys/kernel/hostname" << std::endl;
+    }
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+    if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';
+    }
+    close(fd);
+    string word = strtok(buffer, WHITESPACE.c_str());
+    return word;
+}
 void SysInfoCommand::execute()
 {
-    cout << "To Do" << endl;
+
+    std::cout << "System: " << get_system_type() << std::endl;
+    std::cout << "Hostname: " << get_hostname() << std::endl;
+    std::cout << "Kernel: " << get_kernel_release() << std::endl;
+    std::cout << "Architecture: x86_64" << std::endl;
+    std::cout << "Boot Time: " << std::endl;
 }
+
 
 PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
     std::string s1, s2;
@@ -641,6 +699,17 @@ void WhoAmICommand::execute() {
     close (fd);
 }
 
+QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs, bool isKill) : BuiltInCommand("")
+{
+    this->isKill = isKill;
+    this->jobs = jobs;
+}
+
+void QuitCommand::execute()
+{
+    if (!isKill) exit(0);
+    jobs->printJobsList_forQUIT();
+}
 
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
