@@ -352,7 +352,9 @@ void KillCommand::execute() {
     }
     if (signum_to_send < 0 || signum_to_send > 31)
         throw std::out_of_range("smash error: kill failed");
-    kill (job_to_signal->getPid(), signum_to_send);
+    pid_t pid_of_job = job_to_signal->getPid();
+    kill (pid_of_job, signum_to_send);
+    cout << "signal number " <<signum_to_send<< " was sent to pid " << pid_of_job;
 }
 
 
