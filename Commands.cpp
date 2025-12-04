@@ -118,6 +118,13 @@ int JobsList::getNextJobID() {
     return maxId + 1;
 }
 
+void JobsList::send_SIGKILL_to_all_jobs() {
+    for (auto &job: jobsVector) {
+        kill(job.getPid(), SIGKILL);
+    }
+}
+
+
 bool JobsList::is_there_a_job_with_pid(const int pid) {
     removeFinishedJobs();
     for (const auto &job : jobsVector) {
@@ -127,6 +134,16 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
     }
     return false;
 }
+
+JobsList::JobEntry *JobsList::getJobById(int jobId) {
+    removeFinishedJobs();
+    for (auto job: jobsVector) {
+        if (job.getJobId() == jobId)
+            return &job;
+    }
+    return nullptr;
+}
+
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
@@ -293,6 +310,49 @@ Command::~Command() = default;
 
 BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
+
+KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) {
+    cmdLine = _trim(cmdLine);
+    std::vector<string> args;
+    string segment;
+    for (auto ch:cmdLine) {
+        if (WHITESPACE.find(ch) == false) {
+            segment += ch;
+        } else {
+            args.push_back(segment);
+            segment.clear();
+        }
+    }
+    if (args.size() > 2) {
+        if (args[1][0] != '-' || args[1].size() != 2) {
+            throw std::invalid_argument("smash error: kill: invalid arguments");
+        }
+        string signum;
+        signum += args[1][1];
+        signum_to_send = stoi(signum);
+        if (args[2].size() != 1)
+            throw std::invalid_argument("smash error: kill: invalid arguments");
+        job_id = stoi (args[2]);
+        return;
+    }
+    throw std::invalid_argument("smash error: kill: invalid arguments");
+}
+
+void KillCommand::execute() {
+    JobsList::JobEntry* job_to_signal = SmallShell::getInstance().getJobList()->getJobById(job_id);
+    if (!job_to_signal) {
+        string to_throw;
+        to_throw += "smash error: kill: job-id ";
+        to_throw[to_throw.size() - 2] = (char)('0' + job_id);
+        to_throw += " does not exist";
+        throw std::out_of_range(to_throw);
+    }
+    if (signum_to_send < 0 || signum_to_send > 31)
+        throw std::out_of_range("smash error: kill failed");
+    kill (job_to_signal->getPid(), signum_to_send);
+}
+
+
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     bool end_of_task = true;
