@@ -55,6 +55,24 @@ int _parseCommandLine(const char *cmd_line, char **args) {
     FUNC_EXIT()
 }
 
+void handler_ctr_C(int sig = SIGINT) {
+    cout << "smash: got ctrl-C" << endl;
+    if (SmallShell::getInstance().pid_of_foreGround == -10)
+        return;
+    pid_t is_foreGround = waitpid(SmallShell::getInstance().pid_of_foreGround,
+        nullptr, WNOHANG);
+    if (!is_foreGround) {
+        if (!kill(SmallShell::getInstance().pid_of_foreGround, SIGINT)) {
+            cout << "smash: process " << SmallShell::getInstance().pid_of_foreGround <<" was killed" << endl;
+        } else {
+            cerr << "smash error: kill failed"<<endl;
+        }
+    }
+    else {
+        SmallShell::getInstance().pid_of_foreGround = -10;
+    }
+}
+
 bool _isBackgroundComamnd(const char *cmd_line) {
     const string str(cmd_line);
     return str[str.find_last_not_of(WHITESPACE)] == '&';
@@ -119,6 +137,13 @@ int JobsList::getNextJobID() {
     return maxId + 1;
 }
 
+void JobsList::send_SIGKILL_to_all_jobs() {
+    for (auto &job: jobsVector) {
+        kill(job.getPid(), SIGKILL);
+    }
+}
+
+
 bool JobsList::is_there_a_job_with_pid(const int pid) {
     removeFinishedJobs();
     for (const auto &job : jobsVector) {
@@ -128,6 +153,16 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
     }
     return false;
 }
+
+JobsList::JobEntry *JobsList::getJobById(int jobId) {
+    removeFinishedJobs();
+    for (auto job: jobsVector) {
+        if (job.getJobId() == jobId)
+            return &job;
+    }
+    return nullptr;
+}
+
 
 void JobsList::addJob(Command *cmd, bool isStopped) {
     removeFinishedJobs();
@@ -166,7 +201,9 @@ void JobsList::printJobsList_forQUIT() {
 
 
 SmallShell::SmallShell() :
-previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()){}
+previousDir(nullptr) , aliasVector({}), m_job_list(new JobsList()) {
+    signal(SIGINT, handler_ctr_C);
+}
 
 SmallShell::~SmallShell() {
     delete m_job_list;
@@ -227,7 +264,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("cd") == 0) {
         if (argc > 2)
         {
-            cout << "smash error: cd: too many arguments" << endl;
+            cerr << "smash error: cd: too many arguments" << endl;
         }
         else if (argv[1] != nullptr)
         {
@@ -243,6 +280,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
+    }
+    if (string(argv[0]).compare("kill") == 0) {
+        return new KillCommand(cmd_line, m_job_list);
     }
     if (string(argv[0]).compare("whoami") == 0) {
         return new WhoAmICommand(cmd_line);
@@ -302,6 +342,51 @@ Command::~Command() = default;
 BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
 }
 
+KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) {
+    cmdLine = _trim(cmdLine);
+    std::vector<string> args;
+    string segment;
+    for (auto ch:cmdLine) {
+        if (WHITESPACE.find(ch) == false) {
+            segment += ch;
+        } else {
+            args.push_back(segment);
+            segment.clear();
+        }
+    }
+    if (args.size() > 2) {
+        if (args[1][0] != '-' || args[1].size() != 2) {
+            throw std::invalid_argument("smash error: kill: invalid arguments");
+        }
+        string signum;
+        signum += args[1][1];
+        signum_to_send = stoi(signum);
+        if (args[2].size() != 1)
+            throw std::invalid_argument("smash error: kill: invalid arguments");
+        job_id = stoi (args[2]);
+        return;
+    }
+    throw std::invalid_argument("smash error: kill: invalid arguments");
+}
+
+void KillCommand::execute() {
+    JobsList::JobEntry* job_to_signal = SmallShell::getInstance().getJobList()->getJobById(job_id);
+    if (!job_to_signal) {
+        string to_throw;
+        to_throw += "smash error: kill: job-id ";
+        to_throw[to_throw.size() - 2] = (char)('0' + job_id);
+        to_throw += " does not exist";
+        throw std::out_of_range(to_throw);
+    }
+    if (signum_to_send < 0 || signum_to_send > 31)
+        throw std::out_of_range("smash error: kill failed");
+    pid_t pid_of_job = job_to_signal->getPid();
+    kill (pid_of_job, signum_to_send);
+    cout << "signal number " <<signum_to_send<< " was sent to pid " << pid_of_job;
+}
+
+
+
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
     bool end_of_task = true;
     std::string to_check = std::string(cmd_line);
@@ -357,6 +442,7 @@ void ExternalCommand::execute() {
             SmallShell::getInstance().getJobList()->addJob(this, pid1);
         }
         else {
+            SmallShell::getInstance().pid_of_foreGround = pid1;
             waitpid(pid1, nullptr, 0);
         }
     }

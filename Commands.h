@@ -10,9 +10,9 @@
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
+public:
     pid_t currentPID;
     std::string cmdLine;
-public:
     explicit Command(const char *cmd_line , pid_t pid = -1) :
      currentPID(pid) , cmdLine(cmd_line) {}
 
@@ -160,6 +160,20 @@ public:
 };
 
 
+class KillCommand : public BuiltInCommand {
+    int signum_to_send = -10;
+    int job_id = -10;
+
+public:
+    KillCommand(const char *cmd_line, JobsList *jobs);
+
+    virtual ~KillCommand() {
+    }
+
+    void execute() override;
+};
+
+
 class JobsList {
 public:
     class JobEntry {
@@ -197,6 +211,8 @@ public:
 
     void removeFinishedJobs();
 
+    void send_SIGKILL_to_all_jobs();
+
     JobEntry *getJobById(int jobId);
 
     void removeJobById(int jobId);
@@ -213,17 +229,6 @@ public:
     }
 };
 
-
-class KillCommand : public BuiltInCommand {
-
-public:
-    KillCommand(const char *cmd_line, JobsList *jobs);
-
-    virtual ~KillCommand() {
-    }
-
-    void execute() override;
-};
 
 class ForegroundCommand : public BuiltInCommand {
 
@@ -287,6 +292,9 @@ private:
     SmallShell();
 
 public:
+
+    pid_t pid_of_foreGround = -10;
+
     char** getPreviousDirPtr() {return &previousDir;}
 
     void setPreviousDirPtr(char* ptr) {previousDir = ptr;}
