@@ -154,6 +154,7 @@ bool JobsList::is_there_a_job_with_pid(const int pid) {
     return false;
 }
 
+
 JobsList::JobEntry *JobsList::getJobById(int jobId) {
     removeFinishedJobs();
     for (auto job: jobsVector) {
