@@ -13,10 +13,13 @@ class Command {
 public:
     pid_t currentPID;
     std::string cmdLine;
+    std::string cmd_to_print = "-1";
     explicit Command(const char *cmd_line , pid_t pid = -1) :
      currentPID(pid) , cmdLine(cmd_line) {}
 
     std::string getCmdLine() const { return cmdLine; }
+
+    std::string getCmdLine_Print() const { return cmd_to_print; }
 
     pid_t getPid() const { return currentPID; }
 

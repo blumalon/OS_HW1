@@ -150,7 +150,7 @@ JobsList::JobEntry* JobsList::getJobById(int jobId) {
 void JobsList::addJob(Command *cmd, pid_t pid_to_use) {
     removeFinishedJobs();
     pid_t m_pid = pid_to_use;
-    string cmdLine = cmd->getCmdLine();
+    string cmdLine = cmd->getCmdLine_Print();
     JobEntry* newJob = new JobEntry(m_pid, cmdLine);
     newJob->set_jobID(this->getNextJobID());
     jobsVector.push_back(newJob);
@@ -207,8 +207,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     //NEED TO FIX/ YOU RUIN THE ORIGINAL CMDLINE THAT IS SUPPOSED TO BE SAVED////////
     for (auto& pair : this->aliasVector)
     {
-        if (pair.first.compare(string(argv[0])) == 0)
-        {
+        if (pair.first.compare(string(argv[0])) == 0) {
             string new_command_line = pair.second;
             for (int i = 1; i < argc; ++i) {
                 new_command_line += " ";
@@ -222,7 +221,6 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             break;
         }
     }
-///////////////////////////////////////////////////////////////////////////////////////
     if (argc == 0) return nullptr;
 
     for (const char &ch : string(cmd_line)) {
@@ -374,20 +372,16 @@ void KillCommand::execute() {
 
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-    bool end_of_task = true;
     std::string to_check = std::string(cmd_line);
+    this ->cmd_to_print = to_check;
     for (auto ch: to_check) {
-        if (WHITESPACE.find(ch) == false) {
-            end_of_task = false;
-        }
         if (ch == '*' || ch == '?')
             am_i_complex = true;
-        if (end_of_task && ch == '&')
+        if (ch == '&')
             am_i_in_background = true;
-        end_of_task = true;
     }
     if (am_i_in_background) {
-        _removeBackgroundSign((char*)cmd_line);
+        //_removeBackgroundSign((char*)cmd_line);
         for (auto &c : cmdLine) {
             if (c == '&')
                 c = ' ';
