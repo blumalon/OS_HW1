@@ -197,11 +197,6 @@ public:
 
     JobsList() = default;
 
-    int get_num_of_unfinished_jobs() {
-        removeFinishedJobs();
-        return jobsVector.size();
-    }
-
     ~JobsList(){jobsVector.clear();}
 
     void addJob(Command *cmd, pid_t pid_to_use);

@@ -158,10 +158,6 @@ void JobsList::addJob(Command *cmd, pid_t pid_to_use) {
 }
 
 
-void JobsList::killAllJobs() {
- this->send_SIGKILL_to_all_jobs();
-}
-
 
 void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
@@ -175,14 +171,15 @@ void JobsList::printJobsList_forJOBS() {
 }
 
 void JobsList::printJobsList_forQUIT() {
-    cout << "smash: sending SIGKILL signal to " << get_num_of_unfinished_jobs() << " jobs:" << endl;
+    cout << "print";
+    cout << "smash: sending SIGKILL signal to " << this->getJobList_size() << " jobs:" << endl;
     string resault;
     for (const auto &job : jobsVector) {
         resault += std::to_string(job->getJobId()) + ": " +
                        job->getCommandLine()  + "\n";
     }
     std::cout << resault << std::endl;
-    killAllJobs();
+    this->send_SIGKILL_to_all_jobs();
     exit(0);
 }
 
@@ -792,16 +789,18 @@ void WhoAmICommand::execute() {
     close (fd);
 }
 
-QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobs, bool isKill) : BuiltInCommand("")
+QuitCommand::QuitCommand(const char* cmd_line, JobsList* jobsR, bool isKill) : BuiltInCommand("")
 {
     this->isKill = isKill;
-    this->jobs = jobs;
+    this->jobs = jobsR;
 }
 
 void QuitCommand::execute()
 {
     if (!isKill) exit(0);
-    jobs->printJobsList_forQUIT();
+    JobsList* jobL = SmallShell::getInstance().getJobList();
+    if (!jobL) cout << "null" << endl;
+    jobL->printJobsList_forQUIT();
 }
 
 ForegroundCommand::ForegroundCommand(const char *cmd_line, int id):BuiltInCommand(cmd_line), jobID_to_foreground(id) {}
