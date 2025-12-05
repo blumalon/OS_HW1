@@ -13,7 +13,7 @@ class Command {
 public:
     pid_t currentPID;
     std::string cmdLine;
-    std::string cmd_to_print = "-1";
+    std::string cmd_to_print = "-1";//filler for print usage in jobs
     explicit Command(const char *cmd_line , pid_t pid = -1) :
      currentPID(pid) , cmdLine(cmd_line) {}
 
@@ -226,17 +226,24 @@ public:
 
     bool is_there_a_job_with_pid(const int pid);
 
-    int getJobList_size() {
+    int getMaxID() {
         removeFinishedJobs();
-        return jobsVector.size();
+        int max = -1;
+        for (auto job:jobsVector) {
+            if (job->getJobId() > max)
+                max = job->getJobId();
+        }
+        return max;
     }
 };
 
 
 class ForegroundCommand : public BuiltInCommand {
+    int jobID_to_foreground;
 
 public:
-    ForegroundCommand(const char *cmd_line, JobsList *jobs);
+    ForegroundCommand(const char *cmd_line, int id);
+    ForegroundCommand(const char *cmd_line);
 
     virtual ~ForegroundCommand() {
     }

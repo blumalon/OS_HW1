@@ -265,6 +265,26 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("alias") == 0) {
         return new AliasCommand(cmd_line);
     }
+    if (string(argv[0]).compare("fg") == 0) {
+        if (argc > 2)
+        {
+            throw std::invalid_argument("smash error: fg: invalid arguments");
+        }
+        if (argc == 2) {
+            int num_id = 1;
+            try {
+                num_id = stoi(string(argv[1]));
+            } catch(std::exception &e) {
+                throw std::invalid_argument("smash error: fg: invalid arguments");
+            }
+            if (num_id < 0) {
+                string to_throw = "smash error: fg: job-id "+std::to_string(num_id)+" does not exist";
+                throw std::invalid_argument(to_throw);
+            }
+            return new ForegroundCommand(cmd_line, num_id);
+        }
+        return new ForegroundCommand(cmd_line);
+    }
     if (string(argv[0]).compare("kill") == 0) {
         return new KillCommand(cmd_line, m_job_list);
     }
@@ -783,6 +803,21 @@ void QuitCommand::execute()
     if (!isKill) exit(0);
     jobs->printJobsList_forQUIT();
 }
+
+ForegroundCommand::ForegroundCommand(const char *cmd_line, int id):BuiltInCommand(cmd_line), jobID_to_foreground(id) {}
+ForegroundCommand::ForegroundCommand(const char *cmd_line):BuiltInCommand(cmd_line) {
+    jobID_to_foreground = SmallShell::getInstance().getJobList()->getMaxID();
+}
+
+void ForegroundCommand::execute() {
+    JobsList::JobEntry* to_bring = SmallShell::getInstance().getJobList()->getJobById(jobID_to_foreground);
+    pid_t PID = to_bring->getPid();
+    cout << to_bring->getCommandLine() << " " << (int)(PID) <<endl;
+    waitpid(PID, nullptr, WNOHANG);
+    SmallShell::getInstance().getJobList()->removeJobById(jobID_to_foreground);
+}
+
+
 
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
