@@ -1,1 +1,4 @@
-Cannot create directory /tmp/OS_HW1/cmake-build-debug: /tmp
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /tmp/tmp.F6NswUfrPm
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/tmp.F6NswUfrPm/cmake-build-debug
