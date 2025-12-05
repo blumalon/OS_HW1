@@ -147,9 +147,9 @@ JobsList::JobEntry* JobsList::getJobById(int jobId) {
 }
 
 
-void JobsList::addJob(Command *cmd, bool isStopped) {
+void JobsList::addJob(Command *cmd, pid_t pid_to_use) {
     removeFinishedJobs();
-    pid_t m_pid = cmd->getPid();
+    pid_t m_pid = pid_to_use;
     string cmdLine = cmd->getCmdLine();
     JobEntry* newJob = new JobEntry(m_pid, cmdLine);
     newJob->set_jobID(this->getNextJobID());
@@ -425,7 +425,7 @@ void ExternalCommand::execute() {
             }
             bash_args[i] = nullptr;
             execvp(bash_args[0], bash_args);
-            exit(1);
+            exit(1);//if we got here,
         }
     } else {//parent proccess
         free(cpy_line);

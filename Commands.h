@@ -201,7 +201,7 @@ public:
 
     ~JobsList(){jobsVector.clear();}
 
-    void addJob(Command *cmd, bool isStopped = false);
+    void addJob(Command *cmd, pid_t pid_to_use);
 
     void printJobsList_forJOBS();
 
