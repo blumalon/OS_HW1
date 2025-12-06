@@ -275,8 +275,10 @@ public:
 };
 
 class UnSetEnvCommand : public BuiltInCommand {
+    char **args;
+    int agrc;
 public:
-    UnSetEnvCommand(const char *cmd_line);
+    UnSetEnvCommand(const char *command_line);
 
     virtual ~UnSetEnvCommand() {
     }

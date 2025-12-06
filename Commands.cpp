@@ -16,7 +16,7 @@
 #include <time.h>
 
 using namespace std;
-
+extern char** environ;
 const std::string WHITESPACE = " \n\r\t\f\v";
 
 #if 0
@@ -334,6 +334,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         if (argc < 2) cerr << "smash error: du: too many arguments" << endl;
         if (argc == 2) return new DiskUsageCommand(cmd_line, argv[2], false);
         if (argc == 1) return new DiskUsageCommand(cmd_line, argv[2], true);
+    }
+    if (string(argv[0]).compare("unsetenv") == 0) {
+        if (argc == 1) cerr << "smash error: unsetenv: not enough arguments" << endl;
+        return new UnSetEnvCommand(cmd_line);
     }
     // For example:
     /*
@@ -1037,40 +1041,47 @@ void RedirectionCommand::execute()
 
 
 
-/*
-UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
-{
 
-}
-
-void UnSetEnvCommand::execute()
+UnSetEnvCommand::UnSetEnvCommand(const char* command_line) : BuiltInCommand("")
 {
-    const char* raw_cmd_line = this->cmd_line;
+    const char* raw_cmd_line = command_line;
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
     int argc = 0;
     argc = _parseCommandLine(raw_cmd_line, argv);
-    if (argc == 1)
+    this->args = argv;
+    this->agrc = argc;
+}
+
+void UnSetEnvCommand::execute()
+{
+    string varName, envVar;
+    bool var_found = false;
+
+    for(int j = 0; j < agrc - 1 ; j++)
     {
-        cout << "smash error: unalias: not enough arguments" << endl;
-    }
-    else
-    {
-        int i = 1;
-        while(i < argc)
-        {
-            if(!AliasExists(std::string(argv[i])))
-            {
-                cout << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
-                return;
-            }
-            else
-            {
-                AliasRemove(std::string(argv[i]));
+        varName = string(args[j+1]);
+        int i = 0;
+        while (environ[i] != nullptr) {
+            envVar = string(environ[i]);
+            size_t eq_pos = envVar.find('=');
+            string current_Var = envVar.substr(0, eq_pos);
+            if (varName == current_Var) {
+                var_found = true;
+                int k = i;
+                while (environ[k] != nullptr) {
+                    environ[k] = environ[k + 1];
+                    k++;
+                }
+                break;
             }
             i++;
         }
+        if (!var_found)
+        {
+            cerr << "smash error: unsetenv: " << varName << " does not exist" << endl;
+            return;
+        }
+        var_found = false;
     }
-    for (int i = 0; i < argc; ++i) {
-        free(argv[i]);
-        }*/
+}
