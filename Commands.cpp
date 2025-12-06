@@ -5,11 +5,15 @@
 #include <fcntl.h>
 #include <sstream>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <iomanip>
 #include "Commands.h"
 #include <regex>
-
+#include <sys/syscall.h>
 #include <linux/limits.h>
+#include <dirent.h>
+#include <time.h>
 
 using namespace std;
 
@@ -158,11 +162,6 @@ void JobsList::addJob(Command *cmd, pid_t pid_to_use) {
 }
 
 
-void JobsList::killAllJobs() {
- this->send_SIGKILL_to_all_jobs();
-}
-
-
 void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
     string resault;
@@ -171,18 +170,19 @@ void JobsList::printJobsList_forJOBS() {
                        job->getCommandLine()  + "\n";
        // std::cout << job->getCommandLine() << endl;
     }
-    std::cout << resault << std::endl;
+    std::cout << resault;
 }
 
 void JobsList::printJobsList_forQUIT() {
-    cout << "smash: sending SIGKILL signal to " << this->removeFinishedJobs() << " jobs:" << endl;
+    removeFinishedJobs();
+    cout << "smash: sending SIGKILL signal to " << this->jobsVector.size() << " jobs:" << endl;
     string resault;
     for (const auto &job : jobsVector) {
-        resault += std::to_string(job->getJobId()) + ": " +
+        resault += std::to_string(job->getPid()) + ": " +
                        job->getCommandLine()  + "\n";
     }
-    std::cout << resault << std::endl;
-    killAllJobs();
+    std::cout << resault;
+    send_SIGKILL_to_all_jobs();
     exit(0);
 }
 
@@ -202,13 +202,17 @@ SmallShell::~SmallShell() {
 Command *SmallShell::CreateCommand(const char *cmd_line) {
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
+    char* original_comman_line = strdup(cmd_line);
+    bool is_alias = false;
+    string new_command_line;
     int argc = _parseCommandLine(cmd_line, argv);
     if (_trim(string(cmd_line)).empty()) return nullptr;
-    //NEED TO FIX/ YOU RUIN THE ORIGINAL CMDLINE THAT IS SUPPOSED TO BE SAVED////////
+    //NEED TO UPDATE WHERE TO SEND ORIGINAL_COMMAND_LINE////////
     for (auto& pair : this->aliasVector)
     {
         if (pair.first.compare(string(argv[0])) == 0) {
-            string new_command_line = pair.second;
+            is_alias = true;
+            new_command_line = pair.second;
             for (int i = 1; i < argc; ++i) {
                 new_command_line += " ";
                 new_command_line += argv[i];
@@ -218,9 +222,11 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             const char* new_command_line_ptr = new_command_line.c_str();
             char* strPtr = strdup(new_command_line_ptr);
             argc = _parseCommandLine(strPtr, argv);
+            free(strPtr);
             break;
         }
     }
+
     if (argc == 0) return nullptr;
 
     for (const char &ch : string(cmd_line)) {
@@ -302,6 +308,11 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             return new QuitCommand(cmd_line, this->m_job_list, true);
         return new QuitCommand(cmd_line, this->m_job_list, false);
     }
+    if (string(argv[0]).compare("du") == 0) {
+        if (argc < 2) cerr << "smash error: du: too many arguments" << endl;
+        if (argc == 2) return new DiskUsageCommand(cmd_line, argv[2], false);
+        if (argc == 1) return new DiskUsageCommand(cmd_line, argv[2], true);
+    }
     // For example:
     /*
 
@@ -310,7 +321,13 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     .....
     */
     else {
-      return new ExternalCommand(cmd_line);
+        if(is_alias)
+        {
+            const char* new_command_line_ptr = new_command_line.c_str();
+            char* newStr = strdup(new_command_line_ptr);
+            return new ExternalCommand(newStr);
+        }
+        return new ExternalCommand(cmd_line);
     }
 
     return nullptr;
@@ -665,14 +682,34 @@ string get_hostname()
     string word = strtok(buffer, WHITESPACE.c_str());
     return word;
 }
+
+string get_boot_time()
+{
+    struct timespec timeElapsed;
+    struct timespec currentTime;
+    if(clock_gettime(CLOCK_BOOTTIME, &timeElapsed) != 0)
+    {
+        cerr << "Failed in getting boot time" << endl;
+    }
+    if(clock_gettime(CLOCK_REALTIME, &currentTime) != 0)
+    {
+        cerr << "Failed in getting current time" << endl;
+    }
+    time_t bootTimeInSec = currentTime.tv_sec - timeElapsed.tv_sec;
+    struct tm* bootTime = std::localtime(&bootTimeInSec);
+    char buffer[100];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", bootTime);
+    return string(buffer);
+}
+
 void SysInfoCommand::execute()
 {
 
-    std::cout << "System: " << get_system_type() << std::endl;
-    std::cout << "Hostname: " << get_hostname() << std::endl;
-    std::cout << "Kernel: " << get_kernel_release() << std::endl;
-    std::cout << "Architecture: x86_64" << std::endl;
-    std::cout << "Boot Time: " << std::endl;
+    cout << "System: " << get_system_type() << endl;
+    cout << "Hostname: " << get_hostname() << endl;
+    cout << "Kernel: " << get_kernel_release() << endl;
+    cout << "Architecture: x86_64" << endl;
+    cout << "Boot Time: " << get_boot_time() << endl;;
 }
 
 
@@ -818,7 +855,117 @@ void ForegroundCommand::execute() {
     SmallShell::getInstance().getJobList()->removeJobById(jobID_to_foreground);
 }
 
+DiskUsageCommand::DiskUsageCommand(const char *cmd_line, char* path, bool current) : Command(cmd_line)
+{
+    this->cmdLine = cmd_line;
+    this->path = path;
+    this->current = current;
+}
 
+// taken from man page
+struct linux_dirent
+{
+    unsigned long d_ino;
+    off_t d_off;
+    unsigned short d_reclen;
+    char d_name[];
+};
+
+int calcDiskAux(const char *path)
+{
+    int totalUsage = 0, blockSize = 512;
+    struct stat sb;
+    int lstatRes = lstat(path, &sb);
+
+    if (lstatRes == -1)
+    {
+        perror("smash error: lstat failed");
+        return -1;
+    }
+
+    // Usage of dir in path itself
+    totalUsage += sb.st_blocks * blockSize;
+
+    int dir = open(path, O_RDONLY);
+    if (dir == -1)
+    {
+        perror("smash error: dir failed");
+        return -1;
+    }
+
+    int bufferSize = 1024;
+    char buffer[bufferSize];
+    long getDentsRes;
+
+
+    for (;;)
+    {
+        getDentsRes = syscall(SYS_getdents, dir, buffer, bufferSize);
+        if (getDentsRes == -1)
+        {
+            perror("smash error: getdents failed");
+            return -1;
+        }
+        else if (getDentsRes == 0)
+        {
+            break;
+        }
+        else
+        {
+            int idx = 0;
+            struct linux_dirent *d;
+            while (idx < getDentsRes)
+            {
+                d = (struct linux_dirent *)(buffer + idx);
+                // already calculated the dir usage itself
+                if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
+                {
+                    idx += d->d_reclen;
+                    continue;
+                }
+                string fullPath = string(path) + "/" + d->d_name;
+                struct stat sb2;
+                //using fstatat instead of lstat because of path too long error
+                int lstatRes2 = fstatat(dir, d->d_name, &sb2, AT_SYMLINK_NOFOLLOW);
+                if (lstatRes2 == -1)
+                {
+                    perror("smash error: fstatat failed");
+                    return -1;
+                }
+                else if (S_ISDIR(sb2.st_mode))
+                {
+                    totalUsage += calcDiskAux(fullPath.c_str());
+                }
+                else if (!S_ISLNK(sb2.st_mode))
+                { // not sure if needs to check if reg file
+                    totalUsage += sb2.st_blocks * blockSize;
+                }
+                idx += d->d_reclen;
+            }
+        }
+    }
+    close(dir);
+    return totalUsage;
+}
+
+void DiskUsageCommand::execute()
+{
+    int res = -1;
+    if (current)
+    {
+        char buffer[PATH_MAX];
+        if (!getcwd(buffer, sizeof(buffer))) cout << "error!" << endl;
+        res = calcDiskAux(buffer);
+    }
+    else
+    {
+        res = calcDiskAux(path);
+    }
+    res += 1023;
+    res /= 1024;
+    if (res == -1)
+    cout << "Total disk usage: " << res << " KB" << endl;
+}
 
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")

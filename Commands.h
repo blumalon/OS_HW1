@@ -78,8 +78,12 @@ public:
 };
 
 class DiskUsageCommand : public Command {
+    char* cmd_line;
+    char* path;
+    bool current;
 public:
-    DiskUsageCommand(const char *cmd_line);
+
+    DiskUsageCommand(const char *cmd_line, char* path, bool current);
 
     virtual ~DiskUsageCommand() {
     }
@@ -205,7 +209,6 @@ public:
 
     void printJobsList_forQUIT();
 
-    void killAllJobs();
 
     void removeFinishedJobs();
 
