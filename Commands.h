@@ -54,9 +54,12 @@ public:
 
 
 class RedirectionCommand : public Command {
-
+    std::string command;
+    std::string path;
+    bool is_append;
+    bool is_overwrite;
 public:
-    explicit RedirectionCommand(const char *cmd_line);
+    explicit RedirectionCommand(std::string command, std::string path, bool is_append, bool is_overwrite);
 
     virtual ~RedirectionCommand() {
     }

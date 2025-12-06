@@ -202,9 +202,10 @@ SmallShell::~SmallShell() {
 Command *SmallShell::CreateCommand(const char *cmd_line) {
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
-    char* original_comman_line = strdup(cmd_line);
+    //char* original_comman_line = strdup(cmd_line);
     bool is_alias = false;
     string new_command_line;
+    const char* new_command_line_ptr = nullptr;
     int argc = _parseCommandLine(cmd_line, argv);
     if (_trim(string(cmd_line)).empty()) return nullptr;
     //NEED TO UPDATE WHERE TO SEND ORIGINAL_COMMAND_LINE////////
@@ -219,18 +220,41 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
                 free(argv[i]);
             }
             if (argv[0] != nullptr) free(argv[0]);
-            const char* new_command_line_ptr = new_command_line.c_str();
+            new_command_line_ptr = new_command_line.c_str();
             char* strPtr = strdup(new_command_line_ptr);
             argc = _parseCommandLine(strPtr, argv);
             free(strPtr);
             break;
         }
     }
+    if (string(argv[0]).compare("alias") == 0) {
+        return new AliasCommand(cmd_line);
+    }
+    string command_to_check = is_alias ? (new_command_line) : string(cmd_line);
+    for (unsigned int i = 0; i < command_to_check.size() - 1 ; i++){
+        if (command_to_check[i] == '>' && command_to_check[i+1] == '>')
+        {
+            int command_end = command_to_check.find_last_of('>');
+            string command = command_to_check.substr(0, command_end - 1);
+            string path = command_to_check.substr(command_end + 1, std::string::npos);
+            return new RedirectionCommand(command,path, true, false);
+        }
+    }
+    for (const char &ch : command_to_check) {
+        if (ch == '>') {
+            int command_end = command_to_check.find_first_of(ch);
+            string command = command_to_check.substr(0, command_end);
+            string path = command_to_check.substr(command_end + 1, std::string::npos);
+                return new RedirectionCommand(command,path, false, true);
+        }
+    }
+
 
     if (argc == 0) return nullptr;
 
-    for (const char &ch : string(cmd_line)) {
+    for (const char &ch : is_alias ? string(new_command_line_ptr) : string(cmd_line)) {
         if (ch == '|') {
+            if (is_alias) return new PipeCommand(new_command_line_ptr);
             return new PipeCommand(cmd_line);
         }
     }
@@ -268,9 +292,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             return new PipeCommand(cmd_line);
         }
     }
-    if (string(argv[0]).compare("alias") == 0) {
-        return new AliasCommand(cmd_line);
-    }
+
     if (string(argv[0]).compare("fg") == 0) {
         if (argc > 2)
         {
@@ -334,7 +356,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    Command* cmd = CreateCommand(cmd_line);
+    Command* cmd =CreateCommand(cmd_line);
     if (cmd)
     {
         cmd->execute();
@@ -558,7 +580,7 @@ void SmallShell::addAlias(char** argv, const char* cmd_line)
     int name_end = string(command_line).find('=');
     int name_start = string(command_line).find_first_of(' ');
     string name = string(command_line).substr(name_start + 1, name_end - name_start - 1);
-    size_t start_quote_pos = string(command_line).find('\'');
+    size_t start_quote_pos = string(command_line).find_first_of('\'');
     size_t end_quote_pos = string(command_line).rfind('\'');
     string command_string = string(command_line).substr(start_quote_pos + 1, end_quote_pos - start_quote_pos - 1);
     if(!AliasExists(name))
@@ -567,7 +589,7 @@ void SmallShell::addAlias(char** argv, const char* cmd_line)
     }
     else
     {
-        cout << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+        cerr << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
     }
 }
 
@@ -580,6 +602,7 @@ void AliasCommand::execute()
     int argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
+        cout << SmallShell::getInstance().getAliasVector().empty();
         SmallShell::getInstance().printAlias();
         return;
     }
@@ -966,6 +989,53 @@ void DiskUsageCommand::execute()
     if (res == -1)
     cout << "Total disk usage: " << res << " KB" << endl;
 }
+
+RedirectionCommand::RedirectionCommand(std::string command,std::string path, bool is_append, bool is_overwrite) : Command("")
+{
+    this->command = _trim(command);
+    this->path = _trim(path);
+    this->is_append = is_append;
+    this->is_overwrite = is_overwrite;
+}
+
+void RedirectionCommand::execute()
+{
+    int flags = O_WRONLY | O_CREAT;
+    if (is_append) flags |= O_APPEND;
+    if (is_overwrite) flags |= O_TRUNC;
+
+    int stdout_temp = dup(STDOUT_FILENO);
+    if (stdout_temp == -1) {
+        perror("dup Failed");
+        return;
+    }
+
+    int fd = open(path.c_str(), flags, 0644);
+    if (fd == -1) {
+        cerr << "Could Not Open File" << endl;
+        return;
+    }
+
+    if (dup2(fd, STDOUT_FILENO) == -1)
+    {
+        cerr << "dup2 Failed" << endl;
+        close(fd);
+        return;
+    }
+    close(fd);
+    Command* newCommand = SmallShell::getInstance().CreateCommand(command.c_str());
+    if (newCommand)
+    {
+        newCommand->execute();
+        delete newCommand;
+    }
+    if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
+        cerr << "smash error: dup2 restore failed" << endl;
+    }
+    close(stdout_temp);
+}
+
+
 
 /*
 UnSetEnvCommand::UnSetEnvCommand(const char* cmd_line) : BuiltInCommand("")
