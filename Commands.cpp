@@ -350,9 +350,14 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new QuitCommand(cmd_line, this->m_job_list, false);
     }
     if (string(argv[0]).compare("du") == 0) {
+
         if (argc < 2) cerr << "smash error: du: too many arguments" << endl;
-        if (argc == 2) return new DiskUsageCommand(cmd_line, argv[2], false);
-        if (argc == 1) return new DiskUsageCommand(cmd_line, argv[2], true);
+        if (argc == 2) return new DiskUsageCommand(cmd_line, argv[2]);
+        if (argc == 1)
+        {
+            char* path = ("./");
+            return new DiskUsageCommand(cmd_line, path);
+        }
     }
     if (string(argv[0]).compare("unsetenv") == 0) {
         if (argc == 1) cerr << "smash error: unsetenv: not enough arguments" << endl;
@@ -943,116 +948,49 @@ void ForegroundCommand::execute() {
     SmallShell::getInstance().getJobList()->removeJobById(jobID_to_foreground);
 }
 
-DiskUsageCommand::DiskUsageCommand(const char *cmd_line, char* path, bool current) : Command(cmd_line)
+DiskUsageCommand::DiskUsageCommand(const char *cmd_line, char* path) : Command(cmd_line)
 {
-    this->cmdLine = cmd_line;
+    this->cmd_line = cmd_line;
     this->path = path;
-    this->current = current;
 }
 
-// taken from man page
-struct linux_dirent
-{
-    unsigned long d_ino;
-    off_t d_off;
-    unsigned short d_reclen;
-    char d_name[];
-};
-
-int calcDiskAux(const char *path)
-{
-    int totalUsage = 0, blockSize = 512;
+int DUAux(const char *path){
     struct stat sb;
-    int lstatRes = lstat(path, &sb);
-
-    if (lstatRes == -1)
-    {
+    if (lstat(path, &sb) == -1) {
         perror("smash error: lstat failed");
         return -1;
     }
+    size_t total_blocks = sb.st_blocks / 2;
 
-    // Usage of dir in path itself
-    totalUsage += sb.st_blocks * blockSize;
-
-    int dir = open(path, O_RDONLY);
-    if (dir == -1)
-    {
-        perror("smash error: dir failed");
-        return -1;
-    }
-
-    int bufferSize = 1024;
-    char buffer[bufferSize];
-    long getDentsRes;
-
-
-    for (;;)
-    {
-        getDentsRes = syscall(SYS_getdents, dir, buffer, bufferSize);
-        if (getDentsRes == -1)
-        {
-            perror("smash error: getdents failed");
-            return -1;
+    if (S_ISDIR(sb.st_mode)) {
+        if (!opendir(path)) {
+            return total_blocks;
         }
-        else if (getDentsRes == 0)
-        {
-            break;
-        }
-        else
-        {
-            int idx = 0;
-            struct linux_dirent *d;
-            while (idx < getDentsRes)
-            {
-                d = (struct linux_dirent *)(buffer + idx);
-                // already calculated the dir usage itself
-                if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
-                {
-                    idx += d->d_reclen;
-                    continue;
-                }
-                string fullPath = string(path) + "/" + d->d_name;
-                struct stat sb2;
-                //using fstatat instead of lstat because of path too long error
-                int lstatRes2 = fstatat(dir, d->d_name, &sb2, AT_SYMLINK_NOFOLLOW);
-                if (lstatRes2 == -1)
-                {
-                    perror("smash error: fstatat failed");
-                    return -1;
-                }
-                else if (S_ISDIR(sb2.st_mode))
-                {
-                    totalUsage += calcDiskAux(fullPath.c_str());
-                }
-                else if (!S_ISLNK(sb2.st_mode))
-                { // not sure if needs to check if reg file
-                    totalUsage += sb2.st_blocks * blockSize;
-                }
-                idx += d->d_reclen;
+
+        struct dirent* entry;
+        while ((entry = readdir(path)) != NULL) {
+            string entry_name = entry->d_name;
+
+            // CRITICAL: Skip "." and ".." to avoid infinite recursion
+            if (entry_name == "." || entry_name == "..") {
+                continue;
             }
+
+            // Construct the full path for the next recursive call
+            // Check if path already ends with '/' to avoid double slashes
+            string next_path = (path.back() == '/') ? path + entry_name : path + "/" + entry_name;
+
+            total_blocks += getDirectorySize(next_path);
         }
+        closedir(dir);
     }
-    close(dir);
-    return totalUsage;
+    return total_blocks;
+    }
 }
 
 void DiskUsageCommand::execute()
 {
-    int res = -1;
-    if (current)
-    {
-        char buffer[PATH_MAX];
-        if (!getcwd(buffer, sizeof(buffer))) cout << "error!" << endl;
-        res = calcDiskAux(buffer);
-    }
-    else
-    {
-        res = calcDiskAux(path);
-    }
-    res += 1023;
-    res /= 1024;
-    if (res == -1)
-    cout << "Total disk usage: " << res << " KB" << endl;
+        cout << "Total disk usage: " << DUAux(path) << " KB" << endl;
 }
 
 RedirectionCommand::RedirectionCommand(std::string command,std::string path, bool is_append, bool is_overwrite) : Command("")

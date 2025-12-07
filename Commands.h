@@ -81,12 +81,12 @@ public:
 };
 
 class DiskUsageCommand : public Command {
-    char* cmd_line;
+    const char* cmd_line;
     char* path;
-    bool current;
+
 public:
 
-    DiskUsageCommand(const char *cmd_line, char* path, bool current);
+    DiskUsageCommand(const char *cmd_line, char* path);
 
     virtual ~DiskUsageCommand() {
     }
