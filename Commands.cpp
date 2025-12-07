@@ -358,8 +358,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new QuitCommand(cmd_line, this->m_job_list, false);
     }
     if (string(argv[0]).compare("du") == 0) {
-
-        if (argc < 2) throw std::invalid_argument("smash error: du: too many arguments");
+        if (argc > 2) throw std::invalid_argument("smash error: du: too many arguments");
         if (argc == 2) return new DiskUsageCommand(cmd_line, string(argv[1]));
         if (argc == 1)
         {
