@@ -31,6 +31,14 @@ const std::string WHITESPACE = " \n\r\t\f\v";
 #define SYSINFO_BUFFER_SIZE 2048
 #endif
 
+struct linux_dirent {
+    unsigned long  current_ino;
+    unsigned long  current_off;
+    unsigned short current_reclen;
+    char           current_name[];
+};
+
+
 string _ltrim(const std::string &s) {
     size_t start = s.find_first_not_of(WHITESPACE);
     return (start == std::string::npos) ? "" : s.substr(start);
@@ -352,11 +360,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("du") == 0) {
 
         if (argc < 2) cerr << "smash error: du: too many arguments" << endl;
-        if (argc == 2) return new DiskUsageCommand(cmd_line, argv[2]);
+        if (argc == 2) return new DiskUsageCommand(cmd_line, string(argv[1]));
         if (argc == 1)
         {
-            char* path = ("./");
-            return new DiskUsageCommand(cmd_line, path);
+            return new DiskUsageCommand(cmd_line, "./");
         }
     }
     if (string(argv[0]).compare("unsetenv") == 0) {
@@ -438,7 +445,7 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
             throw std::invalid_argument("smash error: kill: invalid arguments");
         }
         string signum;
-        int i = 1;
+        unsigned int i = 1;
         while (i < args[1]. size() - 1) {
             signum += args[1][i];
             i++;
@@ -487,19 +494,15 @@ void KillCommand::execute() {
 
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-    std::string to_check = std::string(cmd_line);
-    this ->cmd_to_print = to_check;
-    for (auto ch: to_check) {
+    this ->cmd_to_print = std::string(cmd_line);
+    bool first_AND = true;
+    for (auto &ch: cmdLine) {
         if (ch == '*' || ch == '?')
             am_i_complex = true;
-        if (ch == '&')
+        if (ch == '&' && first_AND) {
             am_i_in_background = true;
-    }
-    if (am_i_in_background) {
-        //_removeBackgroundSign((char*)cmd_line);
-        for (auto &c : cmdLine) {
-            if (c == '&')
-                c = ' ';
+            ch = ' ';
+            first_AND = false;
         }
     }
 }
@@ -514,7 +517,7 @@ void ExternalCommand::execute() {
     pid_t pid1 = fork();
     if (pid1 == -1) {
         free(cpy_line);
-        return;
+        throw std::runtime_error("smash error: fork failed");
     }
     if (pid1 == 0) { // child proccess
         setpgrp();
@@ -523,6 +526,7 @@ void ExternalCommand::execute() {
             char flag[] = "-c";
             char* args[] = { bash_path, flag, cpy_line, nullptr };
             execv(bash_path, args);
+            throw std::runtime_error("smash error: execv failed");
             exit(1); // if we got here, the execv FAILED
         } else {
             char* bash_args[20]; // Assuming max 20 args per requirements
@@ -534,7 +538,7 @@ void ExternalCommand::execute() {
             }
             bash_args[i] = nullptr;
             execvp(bash_args[0], bash_args);
-            exit(1);//if we got here,
+            throw std::runtime_error("smash error: execvp failed");
         }
     } else {//parent proccess
         free(cpy_line);
@@ -562,7 +566,9 @@ GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(""){
 
 void GetCurrDirCommand::execute(){
     char buffer[PATH_MAX];
-    if (!getcwd(buffer, sizeof(buffer))) cout << "error!" << endl;
+    if (!getcwd(buffer, sizeof(buffer))){
+        throw std::runtime_error("smash error: getcwd failed");
+    }
     else cout << buffer << endl;
 }
 
@@ -805,42 +811,40 @@ void SysInfoCommand::execute()
 PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
     std::string s1, s2;
     bool foundPipe = false;
-    bool found_AND_after_pipe = false;
     for (const char &ch : std::string(cmd_line)) {
-        if (ch == '|') {
-            foundPipe = true;
-            continue;
-        }
-        if (foundPipe) {
-            if (ch == '&') {
-                found_AND_after_pipe = true;
-                continue;
+        if (foundPipe == false) {
+            if (ch == '|') {
+                foundPipe = true;
+            } else {
+                s1 += ch;
             }
+        } else {
             s2 += ch;
-        }else {
-            s1 += ch;
         }
     }
+   if (s2[0] == '&') {
+       am_i_with_AND = true;
+       s2 = s2.substr(1, s2.size() - 1);
+   }
     firstCommand = SmallShell::getInstance().CreateCommand(s1.c_str());
     secondCommand = SmallShell::getInstance().CreateCommand(s2.c_str());
-    am_i_with_AND = found_AND_after_pipe;
 }
+
+
 
 void PipeCommand::execute() {
     int my_pipe[2];
     while (pipe(my_pipe) == -1) {}
     pid_t pid1 = fork();
-    while (pid1 == -1) {
-        pid1 = fork();
-    }
+    if (pid1 == -1)
+        throw std::runtime_error("smash error: fork failed");
     if (pid1 == 0) { //the child proccess
         close(my_pipe[0]); //close read end
         setpgrp();
         int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
         int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
-        while (dup_worked == -1) {
-            dup_worked = dup2(my_pipe[1], fd_to_write);
-        }
+        if (dup_worked == -1)
+            throw std::runtime_error("smash error: dup2 failed");
         close(my_pipe[1]); //close write end of pipe
         firstCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(firstCommand, 0);
@@ -848,16 +852,14 @@ void PipeCommand::execute() {
         exit(0);
     }
     pid_t pid2 = fork();
-    while (pid2 == -1) {
-        pid2 = fork();
-    }
+    if (pid2 == -1)
+        throw std::runtime_error("smash error: fork failed");
     if (pid2 == 0) { //the second child proccess
         close(my_pipe[1]); //close write end of pipe
         setpgrp();
         int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
-        while (dup_worked == -1) {
-            dup_worked = dup2(my_pipe[0], 0);
-        }
+        if (dup_worked == -1)
+            throw std::runtime_error("smash error: dup2 failed");
         close(my_pipe[0]); //close read end of pipe
         secondCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(secondCommand, 0);
@@ -937,6 +939,9 @@ ForegroundCommand::ForegroundCommand(const char *cmd_line):BuiltInCommand(cmd_li
 }
 
 void ForegroundCommand::execute() {
+    SmallShell::getInstance().getJobList()->removeFinishedJobs();
+    if (SmallShell::getInstance().getJobList()->jobsVector.size() == 0)
+        throw std::invalid_argument("smash error: fg: jobs list is empty");
     JobsList::JobEntry* to_bring = SmallShell::getInstance().getJobList()->getJobById(jobID_to_foreground);
     if (to_bring == nullptr) {
         string to_throw = "smash error: fg: job-id "+to_string(jobID_to_foreground)+" does not exist";
@@ -948,45 +953,50 @@ void ForegroundCommand::execute() {
     SmallShell::getInstance().getJobList()->removeJobById(jobID_to_foreground);
 }
 
-DiskUsageCommand::DiskUsageCommand(const char *cmd_line, char* path) : Command(cmd_line)
+DiskUsageCommand::DiskUsageCommand(const char *cmd_line, string path) : Command(cmd_line)
 {
     this->cmd_line = cmd_line;
     this->path = path;
 }
 
-int DUAux(const char *path){
+size_t DUAux(string path){
+    int block_size = 512;
     struct stat sb;
-    if (lstat(path, &sb) == -1) {
+    if (lstat(path.c_str(), &sb) == -1) {
         perror("smash error: lstat failed");
-        return -1;
+        return 0;
     }
-    size_t total_blocks = sb.st_blocks / 2;
+    size_t total_size_of_me = sb.st_blocks * block_size;
 
     if (S_ISDIR(sb.st_mode)) {
-        if (!opendir(path)) {
-            return total_blocks;
+        int fd = open(path.c_str(), O_RDONLY | O_DIRECTORY);
+        if (fd == -1) {
+            return total_size_of_me;
         }
+        char buffer[4096];
+        while (true) {
+            long num_read = syscall(SYS_getdents, fd, buffer, sizeof(buffer));
+            if (num_read == -1 || num_read == 0) break;
 
-        struct dirent* entry;
-        while ((entry = readdir(path)) != NULL) {
-            string entry_name = entry->d_name;
-
-            // CRITICAL: Skip "." and ".." to avoid infinite recursion
-            if (entry_name == "." || entry_name == "..") {
-                continue;
+            for (long bpos = 0; bpos < num_read;) {
+                struct linux_dirent* current = (struct linux_dirent*)(buffer + bpos);
+                string currentName = current->current_name;
+                if (currentName != "." && currentName != "..") {
+                    string next_path;
+                    if (path.back() == '/')
+                        next_path = path + currentName;
+                    else
+                        next_path = path + "/" + currentName;
+                    total_size_of_me += DUAux(next_path);
+                }
+                bpos += current->current_reclen;
             }
-
-            // Construct the full path for the next recursive call
-            // Check if path already ends with '/' to avoid double slashes
-            string next_path = (path.back() == '/') ? path + entry_name : path + "/" + entry_name;
-
-            total_blocks += getDirectorySize(next_path);
         }
-        closedir(dir);
+        close(fd);
     }
-    return total_blocks;
-    }
+    return total_size_of_me;
 }
+
 
 void DiskUsageCommand::execute()
 {
@@ -1009,19 +1019,19 @@ void RedirectionCommand::execute()
 
     int stdout_temp = dup(STDOUT_FILENO);
     if (stdout_temp == -1) {
-        perror("dup Failed");
+        perror("smash error: dup Failed");
         return;
     }
 
     int fd = open(path.c_str(), flags, 0644);
     if (fd == -1) {
-        cerr << "Could Not Open File" << endl;
+        cerr << "smash error: Could Not Open File" << endl;
         return;
     }
 
     if (dup2(fd, STDOUT_FILENO) == -1)
     {
-        cerr << "dup2 Failed" << endl;
+        cerr << "smash error: dup2 Failed" << endl;
         close(fd);
         return;
     }
@@ -1033,7 +1043,7 @@ void RedirectionCommand::execute()
         delete newCommand;
     }
     if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
-        cerr << "smash error: dup2 restore failed" << endl;
+        cerr << "smash error: dup2 failed" << endl;
     }
     close(stdout_temp);
 }

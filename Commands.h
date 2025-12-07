@@ -68,13 +68,15 @@ public:
 };
 
 class PipeCommand : public Command {
-    Command* firstCommand;
-    Command* secondCommand;
+    Command* firstCommand = nullptr;
+    Command* secondCommand = nullptr;
     bool am_i_with_AND;
 public:
     PipeCommand(const char *cmd_line);
 
     virtual ~PipeCommand() {
+       delete firstCommand;
+        delete secondCommand;
     }
 
     void execute() override;
@@ -82,11 +84,11 @@ public:
 
 class DiskUsageCommand : public Command {
     const char* cmd_line;
-    char* path;
+    std::string path;
 
 public:
 
-    DiskUsageCommand(const char *cmd_line, char* path);
+    DiskUsageCommand(const char *cmd_line, std::string path);
 
     virtual ~DiskUsageCommand() {
     }
