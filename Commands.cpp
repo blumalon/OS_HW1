@@ -94,6 +94,7 @@ void _removeBackgroundSign(char *cmd_line) {
 void JobsList::removeJobById(int jobId) {
     for (unsigned int i = 0; i < jobsVector.size(); ++i) {
         if (jobsVector[i]->getJobId() == jobId) {
+            waitpid(jobsVector[i] ->getPid(), nullptr, WNOHANG);
             jobsVector.erase(jobsVector.begin() + i);
             return;
         }
@@ -236,6 +237,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
     if (string(argv[0]).compare("alias") == 0) {
+        for (int i = 0; i < argc; i++) {
+            free(argv[i]);
+        }
         return new AliasCommand(cmd_line);
     }
     string command_to_check = is_alias ? (new_command_line) : string(cmd_line);
@@ -245,6 +249,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             int command_end = command_to_check.find_last_of('>');
             string command = command_to_check.substr(0, command_end - 1);
             string path = command_to_check.substr(command_end + 1, std::string::npos);
+            for (int i = 0; i < argc; i++) {
+                free(argv[i]);
+            }
             return new RedirectionCommand(command,path, true, false);
         }
     }
@@ -253,7 +260,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             int command_end = command_to_check.find_first_of(ch);
             string command = command_to_check.substr(0, command_end);
             string path = command_to_check.substr(command_end + 1, std::string::npos);
-                return new RedirectionCommand(command,path, false, true);
+            for (int i = 0; i < argc; i++) {
+                free(argv[i]);
+            }
+            return new RedirectionCommand(command,path, false, true);
         }
     }
 
@@ -262,35 +272,51 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
     for (const char &ch : is_alias ? string(new_command_line_ptr) : string(cmd_line)) {
         if (ch == '|') {
+            for (int i = 0; i < argc; i++) {
+                free(argv[i]);
+            }
             if (is_alias) return new PipeCommand(new_command_line_ptr);
             return new PipeCommand(cmd_line);
         }
     }
     if (string(argv[0]).compare("chprompt") == 0) {
+        for (int i = 0; i < argc; i++) {
+            free(argv[i]);
+        }
         if(argc == 1) return new ChangePrompt("");
         return new ChangePrompt(argv[1]);
     }
 
     if (string(argv[0]).compare("showpid") == 0 || string(argv[0]).compare("showpid&") == 0) {
+        for (int i = 0; i < argc; i++) {
+            free(argv[i]);
+        }
       return new ShowPidCommand(cmd_line);
     }
 
     if (string(argv[0]).compare("jobs") == 0 || string(argv[0]).compare("jobs&") == 0) {
+        for (int i = 0; i < argc; i++) {
+            free(argv[i]);
+        }
         return new JobsCommand(cmd_line);
     }
 
     if (string(argv[0]).compare("pwd") == 0 || string(argv[0]).compare("pwd&") == 0) {
+        for (int i = 0; i < argc; i++) {
+            free(argv[i]);
+        }
         return new GetCurrDirCommand(cmd_line);
     }
 
     if (string(argv[0]).compare("cd") == 0 ) {
-        if (argc > 2)
-        {
+
+        if (argc > 2){
             if (string(argv[2]).compare("&") == 0)
                 if (argc == 3) {
                     return new ChangeDirCommand(argv[1]);
                 }
-            throw std::invalid_argument("smash error: cd: too many arguments");
+            cerr<<("smash error: cd: too many arguments")<<endl;
+            return  nullptr;
         }
         else if (argv[1] != nullptr)
         {
@@ -301,28 +327,46 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     string line = cmd_line;
     for (auto ch: line) {
         if(ch == '|') {
+            for (int i = 0; i < argc; i++) {
+                free(argv[i]);
+            }
             return new PipeCommand(cmd_line);
         }
     }
 
     if (string(argv[0]).compare("fg") == 0) {
         if (argc > 2){
-            if (argc > 3)
-                throw std::invalid_argument("smash error: fg: invalid arguments");
+            if (argc > 3) {
+                for (int i = 0; i < argc; i++) {
+                    free(argv[i]);
+                }
+                cerr<<("smash error: fg: invalid arguments")<<endl;
+                return  nullptr;
+            }
             ssize_t idx = string(argv[2]).find_first_not_of(' ');
             string last_arg = string(argv[2]).substr(idx, idx+1);
-            if (last_arg.compare("&") == 0) {
-                int num_id;
-                try {
-                    num_id = stoi(string(argv[1]));
-                } catch(std::exception &e) {
-                    throw std::invalid_argument("smash error: fg: invalid arguments");
+            if (last_arg.compare("&") == 0 || argc == 2) {
+                char *c = argv[1];
+                string num;
+                while (*c != '\0') {
+                    if (WHITESPACE.find(c) == false && *c != '&' && *c < '0' || *c > 9) {
+                        cerr<<("smash error: fg: invalid arguments")<<endl;
+                        return nullptr;
+                    }
+                    if (*c != '&') {
+                        num += *c;
+                    }
+                    c++;
                 }
+                int num_id = stoi(num);
                 if (num_id < 0) {
                     string to_throw = "smash error: fg: job-id "+std::to_string(num_id)+" does not exist";
-                    throw std::invalid_argument(to_throw);
+                    cerr<<(to_throw.c_str())<<endl;
+                    return nullptr;
                 }
-                return new ForegroundCommand(cmd_line, num_id);
+                string clean_line = string(cmd_line);
+                clean_line = _trim(clean_line);
+                return new ForegroundCommand(clean_line.c_str(), num_id);
             }
         }
         if (argc == 2) {
@@ -330,63 +374,72 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             try {
                 num_id = stoi(string(argv[1]));
             } catch(std::exception &e) {
-                throw std::invalid_argument("smash error: fg: invalid arguments");
+                cerr<<("smash error: fg: invalid arguments")<<endl;
+                return nullptr;
             }
             if (num_id < 0) {
                 string to_throw = "smash error: fg: job-id "+std::to_string(num_id)+" does not exist";
-                throw std::invalid_argument(to_throw);
+                cerr<<(to_throw.c_str())<<endl;
+                return nullptr;
             }
-            return new ForegroundCommand(cmd_line, num_id);
+            string clean_line = string(cmd_line);
+            clean_line = _trim(clean_line);
+            return new ForegroundCommand(clean_line.c_str(), num_id);
         }
-        return new ForegroundCommand(cmd_line);
+        string clean_line = string(cmd_line);
+        clean_line = _trim(clean_line);
+        return new ForegroundCommand(clean_line.c_str());
     }
+    string clean_line = string(cmd_line);
+    clean_line = _trim(clean_line);
     if (string(argv[0]).compare("kill") == 0) {
-        return new KillCommand(cmd_line, m_job_list);
+        return new KillCommand(clean_line.c_str(), m_job_list);
     }
     if (string(argv[0]).compare("whoami") == 0) {
-        return new WhoAmICommand(cmd_line);
+        return new WhoAmICommand(clean_line.c_str());
     }
     if (string(argv[0]).compare("unalias") == 0) {
-        return new UnAliasCommand(cmd_line);
+        return new UnAliasCommand(clean_line.c_str());
     }
     if (string(argv[0]).compare("sysinfo") == 0) {
-        return new SysInfoCommand(cmd_line);
+        return new SysInfoCommand(clean_line.c_str());
     }
     if (string(argv[0]).compare("quit") == 0) {
         if(argv[1] && string(argv[1]).compare("kill") == 0)
-            return new QuitCommand(cmd_line, this->m_job_list, true);
-        return new QuitCommand(cmd_line, this->m_job_list, false);
+            return new QuitCommand(clean_line.c_str(), this->m_job_list, true);
+        return new QuitCommand(clean_line.c_str(), this->m_job_list, false);
     }
     if (string(argv[0]).compare("du") == 0) {
-        if (argc > 2) throw std::invalid_argument("smash error: du: too many arguments");
-        if (argc == 2) return new DiskUsageCommand(cmd_line, string(argv[1]));
+        if (argc > 2) {
+            cerr<<("smash error: du: too many arguments")<<endl;
+            return nullptr;
+        }
+        if (argc == 2) return new DiskUsageCommand(clean_line.c_str(), string(argv[1]));
         if (argc == 1)
         {
-            return new DiskUsageCommand(cmd_line, "./");
+            string clean_line = string(cmd_line);
+            clean_line = _trim(clean_line);
+            return new DiskUsageCommand(clean_line.c_str(), "./");
         }
     }
     if (string(argv[0]).compare("unsetenv") == 0) {
-        if (argc == 1) throw std::invalid_argument("smash error: unsetenv: not enough arguments");
-        return new UnSetEnvCommand(cmd_line);
-    }
-    // For example:
-    /*
-
-
-    else if ...
-    .....
-    */
-    else {
-        if(is_alias)
-        {
-            const char* new_command_line_ptr = new_command_line.c_str();
-            char* newStr = strdup(new_command_line_ptr);
-            return new ExternalCommand(newStr);
+        if (argc == 1) {
+            cerr<<("smash error: unsetenv: not enough arguments")<<endl;
+            return nullptr;
         }
-        return new ExternalCommand(cmd_line);
+        string clean_line = string(cmd_line);
+        clean_line = _trim(clean_line);
+        return new UnSetEnvCommand(clean_line.c_str());
     }
 
-    return nullptr;
+    if(is_alias){
+        const char* new_command_line_ptr = new_command_line.c_str();
+        char* newStr = strdup(new_command_line_ptr);
+        string clean_line = string(newStr);
+        clean_line = _trim(clean_line.c_str());
+        return new ExternalCommand(clean_line.c_str());
+    }
+    return new ExternalCommand(clean_line.c_str());
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
@@ -441,7 +494,8 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
     }
     if (args.size() > 2) {
         if (args[1][0] != '-' || args[1].size() > 3) {
-            throw std::invalid_argument("smash error: kill: invalid arguments");
+            cerr << ("smash error: kill: invalid arguments") << endl;
+            return;
         }
         string signum;
         unsigned int i = 1;
@@ -456,8 +510,10 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
         string jobID;
         i = 0;
         while (i < args[2].size() - 1) {
-            if (args[2][i] < '0' || args[2][i] > '9')
-                throw std::invalid_argument("smash error: kill: invalid arguments");
+            if (args[2][i] < '0' || args[2][i] > '9') {
+                cerr << ("smash error: kill: invalid arguments") << endl;
+                throw nullptr;
+            }
             jobID += args[2][i];
             i++;
         }
@@ -465,13 +521,16 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
             job_id = stoi(jobID);
             return;
         }
-        if (args[2][i] < '0' || args[2][i] > '9')
-            throw std::invalid_argument("smash error: kill: invalid arguments");
+        if (args[2][i] < '0' || args[2][i] > '9') {
+            cerr << ("smash error: kill: invalid arguments") << endl;
+            throw;
+        }
         jobID += args[2][i];
         job_id = stoi(jobID);
         return;
     }
-    throw std::invalid_argument("smash error: kill: invalid arguments");
+    cerr << ("smash error: kill: invalid arguments") << endl;
+    throw;
 }
 
 void KillCommand::execute() {
@@ -481,10 +540,12 @@ void KillCommand::execute() {
         to_throw += "smash error: kill: job-id ";
         to_throw[to_throw.size() - 2] = (char)('0' + job_id);
         to_throw += " does not exist";
-        throw std::out_of_range(to_throw);
+        cerr << (to_throw.c_str()) << endl;
+        return;
     }
     if (signum_to_send < 0 || signum_to_send > 31) {
-        throw std::out_of_range("smash error: kill: invalid arguments");
+        cerr << ("smash error: kill: invalid arguments") << endl;
+        return;;
     }
     pid_t pid_of_job = job_to_signal->getPid();
     kill (pid_of_job, signum_to_send);
@@ -518,7 +579,7 @@ void ExternalCommand::execute() {
     if (pid1 == -1) {
         free(cpy_line);
         perror("smash error: fork failed");
-        throw std::runtime_error(nullptr);
+        return;
     }
     if (pid1 == 0) { // child proccess
         setpgrp();
@@ -569,7 +630,7 @@ void GetCurrDirCommand::execute(){
     char buffer[PATH_MAX];
     if (!getcwd(buffer, sizeof(buffer))){
         perror("smash error: getcwd failed");
-        throw std::runtime_error(nullptr);
+        return;
     }
     cout << buffer << endl;
 }
@@ -584,11 +645,14 @@ void ChangeDirCommand::execute()
     char* prevPath = *smash.getPreviousDirPtr();
     if (!prevPath && string(moveTo).compare("-") == 0)
     {
-        throw std::invalid_argument("smash error: cd: OLDPWD not set");
+        perror("smash error: cd: OLDPWD not set");
         return;
     }
     char* old_cwd = getcwd(nullptr, 0);
-    if (!old_cwd) throw std::runtime_error("smash error: getcwd failed");
+    if (!old_cwd) {
+        perror("smash error: getcwd failed");
+        return;
+    }
     if (prevPath != nullptr && string(moveTo).compare("-") == 0)
     {
         moveTo = prevPath;
@@ -653,8 +717,10 @@ void SmallShell::addAlias(char** argv, const char* cmd_line)
     }
     else
     {
-        string to_throw = "smash error: alias: " + name + " already exists or is a reserved command";
-        throw std::invalid_argument(to_throw);
+        string to_throw ="smash error: alias: "
+        + name + " already exists or is a reserved command";
+        perror(to_throw.c_str());
+        return;
     }
 }
 
@@ -688,7 +754,8 @@ void AliasCommand::execute()
         // }
         // size_t spot = flip.find_first_of("'");
 
-        throw std::invalid_argument("smash error: alias: invalid alias format");
+        perror("smash error: alias: invalid alias format");
+        return;
     }
 }
 
@@ -706,7 +773,8 @@ void UnAliasCommand::execute()
     argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
-        throw std::invalid_argument("smash error: unalias: not enough arguments");
+        perror("smash error: unalias: not enough arguments");
+        return;
     }
     else
     {
@@ -716,7 +784,8 @@ void UnAliasCommand::execute()
             if(!AliasExists(std::string(argv[i])))
             {
                 string to_throw = "smash error: unalias: " + string(argv[i]) + " alias does not exist";
-                throw std::invalid_argument(to_throw);
+                cerr<<(to_throw.c_str())<<endl;
+                return;
             }
             else
             {
@@ -740,8 +809,8 @@ string get_kernel_release()
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/sys/kernel/osrelease", O_RDONLY);
     if (fd == -1) {
-        string to_throw = string("smash error: open failed on ") + string("/proc/sys/kernel/osrelease");
-        throw std::runtime_error(to_throw);
+        perror("smash error: open failed");
+        return  "fail";
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -756,7 +825,7 @@ string get_system_type(){
     int fd = open("/proc/version", O_RDONLY);
     if (fd == -1) {
         perror("smash error: open failed");
-        throw std::runtime_error(nullptr);
+        return  "fail";
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -771,9 +840,8 @@ string get_hostname()
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/sys/kernel/hostname", O_RDONLY);
     if (fd == -1) {
-        string to_throw =string("smash error: open failed on ") +
-                         string("/proc/sys/kernel/hostname");
-        throw std::runtime_error(to_throw);
+       perror("smash error: open failed");
+        return  "fail";
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -790,11 +858,13 @@ string get_boot_time()
     struct timespec currentTime;
     if(clock_gettime(CLOCK_BOOTTIME, &timeElapsed) != 0)
     {
-        throw std::runtime_error("Failed in getting boot time");
+        perror("smash error: clock_gettime failed");
+        return  "fail";
     }
     if(clock_gettime(CLOCK_REALTIME, &currentTime) != 0)
     {
-        throw std::runtime_error("Failed in getting current time");
+        perror("smash error: clock_gettime failed");
+        return  "fail";
     }
     time_t bootTimeInSec = currentTime.tv_sec - timeElapsed.tv_sec;
     struct tm* bootTime = std::localtime(&bootTimeInSec);
@@ -805,7 +875,9 @@ string get_boot_time()
 
 void SysInfoCommand::execute()
 {
-
+    if (get_system_type() == "fail" || get_hostname() == "fail" ||
+       get_kernel_release() == "fail" || get_boot_time() == "fail")
+        return;
     cout << "System: " << get_system_type() << endl;
     cout << "Hostname: " << get_hostname() << endl;
     cout << "Kernel: " << get_kernel_release() << endl;
@@ -817,7 +889,7 @@ void SysInfoCommand::execute()
 PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
     std::string s1, s2;
     bool foundPipe = false;
-    for (const char &ch : std::string(cmd_line)) {
+    for (char ch : std::string(cmd_line)) {
         if (foundPipe == false) {
             if (ch == '|') {
                 foundPipe = true;
@@ -842,15 +914,19 @@ void PipeCommand::execute() {
     int my_pipe[2];
     while (pipe(my_pipe) == -1) {}
     pid_t pid1 = fork();
-    if (pid1 == -1)
-        throw std::runtime_error("smash error: fork failed");
+    if (pid1 == -1) {
+        perror("smash error: fork failed");
+        return;
+    }
     if (pid1 == 0) { //the child proccess
         close(my_pipe[0]); //close read end
         setpgrp();
         int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
         int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
-        if (dup_worked == -1)
-            throw std::runtime_error("smash error: dup2 failed");
+        if (dup_worked == -1) {
+            perror("smash error: dup2 failed");
+            return;
+        }
         close(my_pipe[1]); //close write end of pipe
         firstCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(firstCommand, 0);
@@ -858,14 +934,18 @@ void PipeCommand::execute() {
         exit(0);
     }
     pid_t pid2 = fork();
-    if (pid2 == -1)
-        throw std::runtime_error("smash error: fork failed");
+    if (pid2 == -1) {
+        perror("smash error: fork failed");
+        return;
+    }
     if (pid2 == 0) { //the second child proccess
         close(my_pipe[1]); //close write end of pipe
         setpgrp();
         int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
-        if (dup_worked == -1)
-            throw std::runtime_error("smash error: dup2 failed");
+        if (dup_worked == -1) {
+            perror("smash error: dup2 failed");
+            return;
+        }
         close(my_pipe[0]); //close read end of pipe
         secondCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(secondCommand, 0);
@@ -889,7 +969,7 @@ void WhoAmICommand::execute() {
     int fd = open("/etc/passwd", O_RDONLY);
     if (fd == -1) {
         perror("smash error: open failed");
-        throw runtime_error(nullptr);
+        return;
     }
     char ch;
     std::vector<std::string> segments;
@@ -947,16 +1027,19 @@ ForegroundCommand::ForegroundCommand(const char *cmd_line):BuiltInCommand(cmd_li
 
 void ForegroundCommand::execute() {
     SmallShell::getInstance().getJobList()->removeFinishedJobs();
-    if (SmallShell::getInstance().getJobList()->jobsVector.size() == 0)
-        throw std::invalid_argument("smash error: fg: jobs list is empty");
+    if (SmallShell::getInstance().getJobList()->jobsVector.size() == 0) {
+        cerr<<("smash error: fg: jobs list is empty")<<endl;
+        return;
+    }
     JobsList::JobEntry* to_bring = SmallShell::getInstance().getJobList()->getJobById(jobID_to_foreground);
     if (to_bring == nullptr) {
         string to_throw = "smash error: fg: job-id "+to_string(jobID_to_foreground)+" does not exist";
-        throw std::invalid_argument(to_throw);
+        cerr<<(to_throw.c_str())<<endl;
+        return;
     }
     pid_t PID = to_bring->getPid();
     cout << to_bring->getCommandLine() << " " << (int)(PID) <<endl;
-    waitpid(PID, nullptr, WNOHANG);
+    waitpid(PID, nullptr, 0);
     SmallShell::getInstance().getJobList()->removeJobById(jobID_to_foreground);
 }
 
@@ -1007,7 +1090,9 @@ size_t DUAux(string path){
 
 void DiskUsageCommand::execute()
 {
-        cout << "Total disk usage: " << (DUAux(path) + 1023)/1024 << " KB" << endl;
+    size_t calc = DUAux(path);
+    if (calc)
+        cout << "Total disk usage: " << (calc + 1023)/1024 << " KB" << endl;
 }
 
 RedirectionCommand::RedirectionCommand(std::string command,std::string path, bool is_append, bool is_overwrite) : Command("")
@@ -1033,14 +1118,14 @@ void RedirectionCommand::execute()
     int fd = open(path.c_str(), flags, 0644);
     if (fd == -1) {
         perror("smash error: open failed:");
-        throw std::runtime_error(nullptr);
+        return;
     }
 
     if (dup2(fd, STDOUT_FILENO) == -1)
     {
         close(fd);
         perror("smash error: dup2 failed");
-        throw std::runtime_error(nullptr);
+        return;
     }
     close(fd);
     Command* newCommand = SmallShell::getInstance().CreateCommand(command.c_str());
@@ -1051,7 +1136,7 @@ void RedirectionCommand::execute()
     }
     if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
         perror("smash error: dup2 failed");
-        throw std::runtime_error(nullptr);
+        return;
     }
     close(stdout_temp);
 }
@@ -1097,7 +1182,8 @@ void UnSetEnvCommand::execute()
         if (!var_found)
         {
             string to_throw = "smash error: unsetenv: " + varName + " does not exist";
-            throw std::runtime_error(to_throw);
+            cerr<<(to_throw.c_str())<<endl;
+            return;
         }
         var_found = false;
     }
