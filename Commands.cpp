@@ -505,7 +505,7 @@ void ExternalCommand::execute() {
     pid_t pid1 = fork();
     if (pid1 == -1) {
         free(cpy_line);
-        return;
+        throw std::runtime_error("smash error: fork failed");
     }
     if (pid1 == 0) { // child proccess
         setpgrp();
@@ -514,6 +514,7 @@ void ExternalCommand::execute() {
             char flag[] = "-c";
             char* args[] = { bash_path, flag, cpy_line, nullptr };
             execv(bash_path, args);
+            throw std::runtime_error("smash error: execv failed");
             exit(1); // if we got here, the execv FAILED
         } else {
             char* bash_args[20]; // Assuming max 20 args per requirements
@@ -525,7 +526,7 @@ void ExternalCommand::execute() {
             }
             bash_args[i] = nullptr;
             execvp(bash_args[0], bash_args);
-            exit(1);//if we got here,
+            throw std::runtime_error("smash error: execvp failed");
         }
     } else {//parent proccess
         free(cpy_line);
@@ -821,17 +822,15 @@ void PipeCommand::execute() {
     int my_pipe[2];
     while (pipe(my_pipe) == -1) {}
     pid_t pid1 = fork();
-    while (pid1 == -1) {
-        pid1 = fork();
-    }
+    if (pid1 == -1)
+        throw std::runtime_error("smash error: fork failed");
     if (pid1 == 0) { //the child proccess
         close(my_pipe[0]); //close read end
         setpgrp();
         int fd_to_write = (this->am_i_with_AND) ? STDERR_FILENO : STDOUT_FILENO;
         int dup_worked = dup2(my_pipe[1], fd_to_write); //redirect stdout to write end of pipe
-        while (dup_worked == -1) {
-            dup_worked = dup2(my_pipe[1], fd_to_write);
-        }
+        if (dup_worked == -1)
+            throw std::runtime_error("smash error: dup2 failed");
         close(my_pipe[1]); //close write end of pipe
         firstCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(firstCommand, 0);
@@ -839,16 +838,14 @@ void PipeCommand::execute() {
         exit(0);
     }
     pid_t pid2 = fork();
-    while (pid2 == -1) {
-        pid2 = fork();
-    }
+    if (pid2 == -1)
+        throw std::runtime_error("smash error: fork failed");
     if (pid2 == 0) { //the second child proccess
         close(my_pipe[1]); //close write end of pipe
         setpgrp();
         int dup_worked = dup2(my_pipe[0], 0); //redirect stdin to read end of pipe
-        while (dup_worked == -1) {
-            dup_worked = dup2(my_pipe[0], 0);
-        }
+        if (dup_worked == -1)
+            throw std::runtime_error("smash error: dup2 failed");
         close(my_pipe[0]); //close read end of pipe
         secondCommand->setPID(getppid());
         SmallShell::getInstance().getJobList()->addJob(secondCommand, 0);
@@ -1070,19 +1067,19 @@ void RedirectionCommand::execute()
 
     int stdout_temp = dup(STDOUT_FILENO);
     if (stdout_temp == -1) {
-        perror("dup Failed");
+        perror("smash error: dup Failed");
         return;
     }
 
     int fd = open(path.c_str(), flags, 0644);
     if (fd == -1) {
-        cerr << "Could Not Open File" << endl;
+        cerr << "smash error: Could Not Open File" << endl;
         return;
     }
 
     if (dup2(fd, STDOUT_FILENO) == -1)
     {
-        cerr << "dup2 Failed" << endl;
+        cerr << "smash error: dup2 Failed" << endl;
         close(fd);
         return;
     }
@@ -1094,7 +1091,7 @@ void RedirectionCommand::execute()
         delete newCommand;
     }
     if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
-        cerr << "smash error: dup2 restore failed" << endl;
+        cerr << "smash error: dup2 failed" << endl;
     }
     close(stdout_temp);
 }
