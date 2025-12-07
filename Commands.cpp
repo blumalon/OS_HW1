@@ -554,7 +554,9 @@ GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(""){
 
 void GetCurrDirCommand::execute(){
     char buffer[PATH_MAX];
-    if (!getcwd(buffer, sizeof(buffer))) cout << "error!" << endl;
+    if (!getcwd(buffer, sizeof(buffer))){
+        throw std::runtime_error("smash error: getcwd failed");
+    }
     else cout << buffer << endl;
 }
 
