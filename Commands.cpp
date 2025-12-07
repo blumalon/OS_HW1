@@ -290,7 +290,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
                 if (argc == 3) {
                     return new ChangeDirCommand(argv[1]);
                 }
-            cerr << "smash error: cd: too many arguments" << endl;
+            throw std::invalid_argument("smash error: cd: too many arguments");
         }
         else if (argv[1] != nullptr)
         {
@@ -569,7 +569,7 @@ void GetCurrDirCommand::execute(){
     if (!getcwd(buffer, sizeof(buffer))){
         throw std::runtime_error("smash error: getcwd failed");
     }
-    else cout << buffer << endl;
+    cout << buffer << endl;
 }
 
 
