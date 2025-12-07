@@ -20,8 +20,9 @@ int main(int argc, char *argv[]) {
         std::getline(std::cin, cmd_line);
         try {
             smash.executeCommand(cmd_line.c_str());
-        } catch(std::exception &e){
-            e.what();
+        } catch(void*){
+           int i = 0;
+            i++;//some compilers ignore empty catch blocks
         }
     }
     return 0;

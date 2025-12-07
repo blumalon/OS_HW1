@@ -173,6 +173,9 @@ void JobsList::addJob(Command *cmd, pid_t pid_to_use) {
 
 void JobsList::printJobsList_forJOBS() {
     removeFinishedJobs();
+    if (jobsVector.empty()) {
+        return;
+    }
     string resault;
     for (const auto &job : jobsVector) {
         resault += "[" + std::to_string(job->getJobId()) + "] " +
@@ -185,6 +188,8 @@ void JobsList::printJobsList_forJOBS() {
 void JobsList::printJobsList_forQUIT() {
     removeFinishedJobs();
     cout << "smash: sending SIGKILL signal to " << this->jobsVector.size() << " jobs:" << endl;
+    if (this->jobsVector.size() == 0)
+        return;
     string resault;
     for (const auto &job : jobsVector) {
         resault += std::to_string(job->getPid()) + ": " +
@@ -218,6 +223,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     int argc = _parseCommandLine(cmd_line, argv);
     if (_trim(string(cmd_line)).empty()) return nullptr;
     //NEED TO UPDATE WHERE TO SEND ORIGINAL_COMMAND_LINE////////
+    string clean_line = string(cmd_line);
+    clean_line = _trim(clean_line);
+     // cout <<clean_line<<endl;
     for (auto& pair : this->aliasVector)
     {
         if (pair.first.compare(string(argv[0])) == 0) {
@@ -237,10 +245,10 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
     if (string(argv[0]).compare("alias") == 0) {
-        for (int i = 0; i < argc; i++) {
-            free(argv[i]);
-        }
-        return new AliasCommand(cmd_line);
+        // for (int i = 0; i < argc; i++) {
+        //     free(argv[i]);
+        // }
+        return new AliasCommand((clean_line + '\0').c_str());
     }
     string command_to_check = is_alias ? (new_command_line) : string(cmd_line);
     for (unsigned int i = 0; i < command_to_check.size() - 1 ; i++){
@@ -249,9 +257,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             int command_end = command_to_check.find_last_of('>');
             string command = command_to_check.substr(0, command_end - 1);
             string path = command_to_check.substr(command_end + 1, std::string::npos);
-            for (int i = 0; i < argc; i++) {
-                free(argv[i]);
-            }
+            // for (int i = 0; i < argc; i++) {
+            //     free(argv[i]);
+            // }
             return new RedirectionCommand(command,path, true, false);
         }
     }
@@ -260,9 +268,9 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             int command_end = command_to_check.find_first_of(ch);
             string command = command_to_check.substr(0, command_end);
             string path = command_to_check.substr(command_end + 1, std::string::npos);
-            for (int i = 0; i < argc; i++) {
-                free(argv[i]);
-            }
+            // for (int i = 0; i < argc; i++) {
+            //     free(argv[i]);
+            // }
             return new RedirectionCommand(command,path, false, true);
         }
     }
@@ -272,40 +280,42 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
 
     for (const char &ch : is_alias ? string(new_command_line_ptr) : string(cmd_line)) {
         if (ch == '|') {
-            for (int i = 0; i < argc; i++) {
-                free(argv[i]);
-            }
+            // for (int i = 0; i < argc; i++) {
+            //     free(argv[i]);
+            // }
             if (is_alias) return new PipeCommand(new_command_line_ptr);
-            return new PipeCommand(cmd_line);
+            return new PipeCommand((clean_line + '\0').c_str());
         }
     }
     if (string(argv[0]).compare("chprompt") == 0) {
-        for (int i = 0; i < argc; i++) {
-            free(argv[i]);
-        }
         if(argc == 1) return new ChangePrompt("");
+        // if (argc > 2) {
+        //     for (int i = 2; i< argc ; i++)
+        //         free(argv[i]);
+        // }
+        free(argv[0]);
         return new ChangePrompt(argv[1]);
     }
 
     if (string(argv[0]).compare("showpid") == 0 || string(argv[0]).compare("showpid&") == 0) {
-        for (int i = 0; i < argc; i++) {
-            free(argv[i]);
-        }
-      return new ShowPidCommand(cmd_line);
+        // for (int i = 0; i < argc; i++) {
+        //     free(argv[i]);
+        // }
+      return new ShowPidCommand((clean_line + '\0').c_str());
     }
 
     if (string(argv[0]).compare("jobs") == 0 || string(argv[0]).compare("jobs&") == 0) {
-        for (int i = 0; i < argc; i++) {
-            free(argv[i]);
-        }
-        return new JobsCommand(cmd_line);
+        // for (int i = 0; i < argc; i++) {
+        //     free(argv[i]);
+        // }
+        return new JobsCommand((clean_line + '\0').c_str());
     }
 
     if (string(argv[0]).compare("pwd") == 0 || string(argv[0]).compare("pwd&") == 0) {
-        for (int i = 0; i < argc; i++) {
-            free(argv[i]);
-        }
-        return new GetCurrDirCommand(cmd_line);
+        // for (int i = 0; i < argc; i++) {
+        //     free(argv[i]);
+        // }
+        return new GetCurrDirCommand((clean_line + '\0').c_str());
     }
 
     if (string(argv[0]).compare("cd") == 0 ) {
@@ -313,6 +323,8 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         if (argc > 2){
             if (string(argv[2]).compare("&") == 0)
                 if (argc == 3) {
+                    // free(argv[2]);
+                    // free(argv[0]);
                     return new ChangeDirCommand(argv[1]);
                 }
             cerr<<("smash error: cd: too many arguments")<<endl;
@@ -327,19 +339,19 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     string line = cmd_line;
     for (auto ch: line) {
         if(ch == '|') {
-            for (int i = 0; i < argc; i++) {
-                free(argv[i]);
-            }
-            return new PipeCommand(cmd_line);
+            // for (int i = 0; i < argc; i++) {
+            //     free(argv[i]);
+            // }
+            return new PipeCommand((clean_line + '\0').c_str());
         }
     }
 
     if (string(argv[0]).compare("fg") == 0) {
         if (argc > 2){
             if (argc > 3) {
-                for (int i = 0; i < argc; i++) {
-                    free(argv[i]);
-                }
+                // for (int i = 0; i < argc; i++) {
+                //     free(argv[i]);
+                // }
                 cerr<<("smash error: fg: invalid arguments")<<endl;
                 return  nullptr;
             }
@@ -349,7 +361,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
                 char *c = argv[1];
                 string num;
                 while (*c != '\0') {
-                    if (WHITESPACE.find(c) == false && *c != '&' && *c < '0' || *c > 9) {
+                    if ((WHITESPACE.find(c) == false) && (*c != '&') && (*c < '0' || *c > 9)) {
                         cerr<<("smash error: fg: invalid arguments")<<endl;
                         return nullptr;
                     }
@@ -364,62 +376,70 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
                     cerr<<(to_throw.c_str())<<endl;
                     return nullptr;
                 }
-                string clean_line = string(cmd_line);
-                clean_line = _trim(clean_line);
-                return new ForegroundCommand(clean_line.c_str(), num_id);
+                // string clean_line = string(qcmd_line);
+                // clean_line = _trim(clean_line);
+                // return new ForegroundCommand(clean_line.c_str(), num_id);
+                return  new ForegroundCommand((clean_line + '\0').c_str(), num_id);
             }
         }
         if (argc == 2) {
             int num_id = 1;
-            try {
-                num_id = stoi(string(argv[1]));
-            } catch(std::exception &e) {
-                cerr<<("smash error: fg: invalid arguments")<<endl;
-                return nullptr;
+            string num;
+            for (auto ch: string(argv[1])) {
+                if (WHITESPACE.find(ch) == false && ch < '1' || ch > '9') {
+                    cerr<<("smash error: fg: invalid arguments")<<endl;
+                    return nullptr;
+                }
+                else {
+                    num += ch;
+                }
             }
-            if (num_id < 0) {
+           num_id = stoi(num);
+            if (!SmallShell::getJobList()->getJobById(num_id)) {
                 string to_throw = "smash error: fg: job-id "+std::to_string(num_id)+" does not exist";
                 cerr<<(to_throw.c_str())<<endl;
                 return nullptr;
             }
-            string clean_line = string(cmd_line);
-            clean_line = _trim(clean_line);
-            return new ForegroundCommand(clean_line.c_str(), num_id);
+            // string clean_line = string(cmd_line);
+            // clean_line = _trim(clean_line);
+            // return new ForegroundCommand(clean_line.c_str(), num_id);
+            return new ForegroundCommand(cmd_line, num_id);
         }
-        string clean_line = string(cmd_line);
-        clean_line = _trim(clean_line);
-        return new ForegroundCommand(clean_line.c_str());
+        // string clean_line = string(cmd_line);
+        // clean_line = _trim(clean_line);
+        // return new ForegroundCommand(clean_line.c_str());
+        return new ForegroundCommand(cmd_line);
     }
-    string clean_line = string(cmd_line);
-    clean_line = _trim(clean_line);
+    // string clean_line = string(cmd_line);
+    // clean_line = _trim(clean_line);
     if (string(argv[0]).compare("kill") == 0) {
-        return new KillCommand(clean_line.c_str(), m_job_list);
+        return new KillCommand(cmd_line, m_job_list);
     }
     if (string(argv[0]).compare("whoami") == 0) {
-        return new WhoAmICommand(clean_line.c_str());
+        return new WhoAmICommand(cmd_line);
     }
     if (string(argv[0]).compare("unalias") == 0) {
-        return new UnAliasCommand(clean_line.c_str());
+        return new UnAliasCommand(cmd_line);
     }
     if (string(argv[0]).compare("sysinfo") == 0) {
-        return new SysInfoCommand(clean_line.c_str());
+        return new SysInfoCommand(cmd_line);
     }
     if (string(argv[0]).compare("quit") == 0) {
         if(argv[1] && string(argv[1]).compare("kill") == 0)
-            return new QuitCommand(clean_line.c_str(), this->m_job_list, true);
-        return new QuitCommand(clean_line.c_str(), this->m_job_list, false);
+            return new QuitCommand(cmd_line, this->m_job_list, true);
+        return new QuitCommand(cmd_line, this->m_job_list, false);
     }
     if (string(argv[0]).compare("du") == 0) {
         if (argc > 2) {
             cerr<<("smash error: du: too many arguments")<<endl;
             return nullptr;
         }
-        if (argc == 2) return new DiskUsageCommand(clean_line.c_str(), string(argv[1]));
+        if (argc == 2) return new DiskUsageCommand(cmd_line, string(argv[1]));
         if (argc == 1)
         {
-            string clean_line = string(cmd_line);
-            clean_line = _trim(clean_line);
-            return new DiskUsageCommand(clean_line.c_str(), "./");
+            // string clean_line = string(cmd_line);
+            // clean_line = _trim(clean_line);
+            return new DiskUsageCommand(cmd_line, "./");
         }
     }
     if (string(argv[0]).compare("unsetenv") == 0) {
@@ -427,17 +447,17 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
             cerr<<("smash error: unsetenv: not enough arguments")<<endl;
             return nullptr;
         }
-        string clean_line = string(cmd_line);
-        clean_line = _trim(clean_line);
-        return new UnSetEnvCommand(clean_line.c_str());
+        // string clean_line = string(cmd_line);
+        // clean_line = _trim(clean_line);
+        return new UnSetEnvCommand(cmd_line);
     }
 
     if(is_alias){
         const char* new_command_line_ptr = new_command_line.c_str();
-        char* newStr = strdup(new_command_line_ptr);
-        string clean_line = string(newStr);
-        clean_line = _trim(clean_line.c_str());
-        return new ExternalCommand(clean_line.c_str());
+        // char* newStr = strdup(new_command_line_ptr);
+        // string clean_line = string(newStr);
+        // clean_line = _trim(clean_line.c_str());
+        return new ExternalCommand(cmd_line);
     }
     return new ExternalCommand(clean_line.c_str());
 }
@@ -495,7 +515,7 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
     if (args.size() > 2) {
         if (args[1][0] != '-' || args[1].size() > 3) {
             cerr << ("smash error: kill: invalid arguments") << endl;
-            return;
+            throw;
         }
         string signum;
         unsigned int i = 1;
@@ -512,7 +532,7 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
         while (i < args[2].size() - 1) {
             if (args[2][i] < '0' || args[2][i] > '9') {
                 cerr << ("smash error: kill: invalid arguments") << endl;
-                throw nullptr;
+                throw;
             }
             jobID += args[2][i];
             i++;
@@ -769,8 +789,7 @@ void UnAliasCommand::execute()
     const char* raw_cmd_line = this->cmd_line;
     char* args[COMMAND_MAX_ARGS];
     char** argv = args;
-    int argc = 0;
-    argc = _parseCommandLine(raw_cmd_line, argv);
+    int argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
         perror("smash error: unalias: not enough arguments");
@@ -794,9 +813,9 @@ void UnAliasCommand::execute()
             i++;
         }
     }
-    for (int i = 0; i < argc; ++i) {
-        free(argv[i]);
-    }
+    // for (int i = 0; i < argc; ++i) {
+    //     free(argv[i]);
+    // }
 }
 
 SysInfoCommand::SysInfoCommand(const char* cmd_line) : BuiltInCommand("")
@@ -1018,6 +1037,7 @@ void QuitCommand::execute()
     if (!isKill) exit(0);
     JobsList* jobL = SmallShell::getInstance().getJobList();
     jobL->printJobsList_forQUIT();
+    exit (0);
 }
 
 ForegroundCommand::ForegroundCommand(const char *cmd_line, int id):BuiltInCommand(cmd_line), jobID_to_foreground(id) {}
@@ -1090,9 +1110,7 @@ size_t DUAux(string path){
 
 void DiskUsageCommand::execute()
 {
-    size_t calc = DUAux(path);
-    if (calc)
-        cout << "Total disk usage: " << (calc + 1023)/1024 << " KB" << endl;
+    cout << "Total disk usage: " << (DUAux(path) + 1023)/1024 << " KB" << endl;
 }
 
 RedirectionCommand::RedirectionCommand(std::string command,std::string path, bool is_append, bool is_overwrite) : Command("")
