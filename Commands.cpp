@@ -482,19 +482,15 @@ void KillCommand::execute() {
 
 
 ExternalCommand::ExternalCommand(const char* cmd_line) : Command(cmd_line) {
-    std::string to_check = std::string(cmd_line);
-    this ->cmd_to_print = to_check;
-    for (auto ch: to_check) {
+    this ->cmd_to_print = std::string(cmd_line);
+    bool first_AND = true;
+    for (auto &ch: cmdLine) {
         if (ch == '*' || ch == '?')
             am_i_complex = true;
-        if (ch == '&')
+        if (ch == '&' && first_AND) {
             am_i_in_background = true;
-    }
-    if (am_i_in_background) {
-        //_removeBackgroundSign((char*)cmd_line);
-        for (auto &c : cmdLine) {
-            if (c == '&')
-                c = ' ';
+            ch = ' ';
+            first_AND = false;
         }
     }
 }
@@ -800,26 +796,26 @@ void SysInfoCommand::execute()
 PipeCommand::PipeCommand(const char* cmd_line) : Command(cmd_line) {
     std::string s1, s2;
     bool foundPipe = false;
-    bool found_AND_after_pipe = false;
     for (const char &ch : std::string(cmd_line)) {
-        if (ch == '|') {
-            foundPipe = true;
-            continue;
-        }
-        if (foundPipe) {
-            if (ch == '&') {
-                found_AND_after_pipe = true;
-                continue;
+        if (foundPipe == false) {
+            if (ch == '|') {
+                foundPipe = true;
+            } else {
+                s1 += ch;
             }
+        } else {
             s2 += ch;
-        }else {
-            s1 += ch;
         }
     }
+   if (s2[0] == '&') {
+       am_i_with_AND = true;
+       s2 = s2.substr(1, s2.size() - 1);
+   }
     firstCommand = SmallShell::getInstance().CreateCommand(s1.c_str());
     secondCommand = SmallShell::getInstance().CreateCommand(s2.c_str());
-    am_i_with_AND = found_AND_after_pipe;
 }
+
+
 
 void PipeCommand::execute() {
     int my_pipe[2];

@@ -68,13 +68,15 @@ public:
 };
 
 class PipeCommand : public Command {
-    Command* firstCommand;
-    Command* secondCommand;
+    Command* firstCommand = nullptr;
+    Command* secondCommand = nullptr;
     bool am_i_with_AND;
 public:
     PipeCommand(const char *cmd_line);
 
     virtual ~PipeCommand() {
+       delete firstCommand;
+        delete secondCommand;
     }
 
     void execute() override;
