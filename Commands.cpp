@@ -296,8 +296,23 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("fg") == 0) {
         if (argc > 2)
         {
-
-            throw std::invalid_argument("smash error: fg: invalid arguments");
+            if (argc > 3)
+                throw std::invalid_argument("smash error: fg: invalid arguments");
+            ssize_t idx = string(argv[2]).find_first_not_of(" ");
+            string last_arg = string(argv[2]).substr(idx, idx+1);
+            if (last_arg.compare("&") == 0) {
+                int num_id;
+                try {
+                    num_id = stoi(string(argv[1]));
+                } catch(std::exception &e) {
+                    throw std::invalid_argument("smash error: fg: invalid arguments");
+                }
+                if (num_id < 0) {
+                    string to_throw = "smash error: fg: job-id "+std::to_string(num_id)+" does not exist";
+                    throw std::invalid_argument(to_throw);
+                }
+                return new ForegroundCommand(cmd_line, num_id);
+            }
         }
         if (argc == 2) {
             int num_id = 1;
