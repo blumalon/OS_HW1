@@ -932,6 +932,9 @@ ForegroundCommand::ForegroundCommand(const char *cmd_line):BuiltInCommand(cmd_li
 }
 
 void ForegroundCommand::execute() {
+    SmallShell::getInstance().getJobList()->removeFinishedJobs();
+    if (SmallShell::getInstance().getJobList()->jobsVector.size() == 0)
+        throw std::invalid_argument("smash error: fg: jobs list is empty");
     JobsList::JobEntry* to_bring = SmallShell::getInstance().getJobList()->getJobById(jobID_to_foreground);
     if (to_bring == nullptr) {
         string to_throw = "smash error: fg: job-id "+to_string(jobID_to_foreground)+" does not exist";
