@@ -309,7 +309,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         if (argc > 2){
             if (argc > 3)
                 throw std::invalid_argument("smash error: fg: invalid arguments");
-            ssize_t idx = string(argv[2]).find_first_not_of(" ");
+            ssize_t idx = string(argv[2]).find_first_not_of(' ');
             string last_arg = string(argv[2]).substr(idx, idx+1);
             if (last_arg.compare("&") == 0) {
                 int num_id;
@@ -483,8 +483,9 @@ void KillCommand::execute() {
         to_throw += " does not exist";
         throw std::out_of_range(to_throw);
     }
-    if (signum_to_send < 0 || signum_to_send > 31)
-        throw std::out_of_range("smash error: kill failed");
+    if (signum_to_send < 0 || signum_to_send > 31) {
+        throw std::out_of_range("smash error: kill: invalid arguments");
+    }
     pid_t pid_of_job = job_to_signal->getPid();
     kill (pid_of_job, signum_to_send);
     cout << "signal number " <<signum_to_send<< " was sent to pid " << pid_of_job;
@@ -516,7 +517,8 @@ void ExternalCommand::execute() {
     pid_t pid1 = fork();
     if (pid1 == -1) {
         free(cpy_line);
-        throw std::runtime_error("smash error: fork failed");
+        perror("smash error: fork failed");
+        throw std::runtime_error(nullptr);
     }
     if (pid1 == 0) { // child proccess
         setpgrp();
@@ -525,7 +527,7 @@ void ExternalCommand::execute() {
             char flag[] = "-c";
             char* args[] = { bash_path, flag, cpy_line, nullptr };
             execv(bash_path, args);
-            throw std::runtime_error("smash error: execv failed");
+            perror("smash error: execv failed");
             exit(1); // if we got here, the execv FAILED
         } else {
             char* bash_args[20]; // Assuming max 20 args per requirements
@@ -537,7 +539,7 @@ void ExternalCommand::execute() {
             }
             bash_args[i] = nullptr;
             execvp(bash_args[0], bash_args);
-            throw std::runtime_error("smash error: execvp failed");
+            perror("smash error: execvp failed");
         }
     } else {//parent proccess
         free(cpy_line);
@@ -566,7 +568,8 @@ GetCurrDirCommand::GetCurrDirCommand(const char* cmd_line) : BuiltInCommand(""){
 void GetCurrDirCommand::execute(){
     char buffer[PATH_MAX];
     if (!getcwd(buffer, sizeof(buffer))){
-        throw std::runtime_error("smash error: getcwd failed");
+        perror("smash error: getcwd failed");
+        throw std::runtime_error(nullptr);
     }
     cout << buffer << endl;
 }
@@ -748,13 +751,13 @@ string get_kernel_release()
     string word = strtok(buffer, WHITESPACE.c_str());
     return word;
 }
-string get_system_type()
-{
+string get_system_type(){
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/version", O_RDONLY);
     if (fd == -1) {
-        string to_throw = string("smash error: open failed on ") = string("/proc/version ");
-        throw std::runtime_error(to_throw);
+        string to_throw = string("smash error: open failed");
+        perror(to_throw.c_str());
+        throw std::runtime_error('\0');
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -886,7 +889,8 @@ void WhoAmICommand::execute() {
     std::string lineBuff;
     int fd = open("/etc/passwd", O_RDONLY);
     if (fd == -1) {
-        throw runtime_error("Could not open /etc/passwd");
+        perror("smash error: open failed");
+        throw runtime_error(nullptr);
     }
     char ch;
     std::vector<std::string> segments;
@@ -1029,13 +1033,15 @@ void RedirectionCommand::execute()
 
     int fd = open(path.c_str(), flags, 0644);
     if (fd == -1) {
-        throw std::runtime_error("smash error: Could Not Open File");
+        perror("smash error: open failed:");
+        throw std::runtime_error(nullptr);
     }
 
     if (dup2(fd, STDOUT_FILENO) == -1)
     {
         close(fd);
-        throw std::runtime_error("smash error: dup2 Failed");
+        perror("smash error: dup2 failed");
+        throw std::runtime_error(nullptr);
     }
     close(fd);
     Command* newCommand = SmallShell::getInstance().CreateCommand(command.c_str());
@@ -1045,7 +1051,8 @@ void RedirectionCommand::execute()
         delete newCommand;
     }
     if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
-        throw std::runtime_error("smash error: dup2 failed");
+        perror("smash error: dup2 failed");
+        throw std::runtime_error(nullptr);
     }
     close(stdout_temp);
 }
