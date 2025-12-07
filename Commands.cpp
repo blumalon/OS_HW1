@@ -263,21 +263,25 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         return new ChangePrompt(argv[1]);
     }
 
-    if (string(argv[0]).compare("showpid") == 0) {
+    if (string(argv[0]).compare("showpid") == 0 || string(argv[0]).compare("showpid&") == 0) {
       return new ShowPidCommand(cmd_line);
     }
 
-    if (string(argv[0]).compare("jobs") == 0) {
+    if (string(argv[0]).compare("jobs") == 0 || string(argv[0]).compare("jobs&") == 0) {
         return new JobsCommand(cmd_line);
     }
 
-    if (string(argv[0]).compare("pwd") == 0) {
+    if (string(argv[0]).compare("pwd") == 0 || string(argv[0]).compare("pwd&") == 0) {
         return new GetCurrDirCommand(cmd_line);
     }
 
-    if (string(argv[0]).compare("cd") == 0) {
+    if (string(argv[0]).compare("cd") == 0 ) {
         if (argc > 2)
         {
+            if (string(argv[2]).compare("&") == 0)
+                if (argc == 3) {
+                    return new ChangeDirCommand(argv[1]);
+                }
             cerr << "smash error: cd: too many arguments" << endl;
         }
         else if (argv[1] != nullptr)
@@ -426,15 +430,35 @@ KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(c
         }
     }
     if (args.size() > 2) {
-        if (args[1][0] != '-' || args[1].size() != 2) {
+        if (args[1][0] != '-' || args[1].size() > 3) {
             throw std::invalid_argument("smash error: kill: invalid arguments");
         }
         string signum;
-        signum += args[1][1];
+        int i = 1;
+        while (i < args[1]. size() - 1) {
+            signum += args[1][i];
+            i++;
+        }
+        if (args[1][i] != '&') {
+            signum+= args[1][i];
+        }
         signum_to_send = stoi(signum);
-        if (args[2].size() != 1)
+        string jobID;
+        i = 0;
+        while (i < args[2].size() - 1) {
+            if (args[2][i] < '0' || args[2][i] > '9')
+                throw std::invalid_argument("smash error: kill: invalid arguments");
+            jobID += args[2][i];
+            i++;
+        }
+        if (args[2][i] == '&') {
+            job_id = stoi(jobID);
+            return;
+        }
+        if (args[2][i] < '0' || args[2][i] > '9')
             throw std::invalid_argument("smash error: kill: invalid arguments");
-        job_id = stoi (args[2]);
+        jobID += args[2][i];
+        job_id = stoi(jobID);
         return;
     }
     throw std::invalid_argument("smash error: kill: invalid arguments");
