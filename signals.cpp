@@ -18,7 +18,7 @@ void ctrlCHandler(int sig_num) {
         if (!kill(SmallShell::getInstance().pid_of_foreGround, SIGINT)) {
             cout << "smash: process " << SmallShell::getInstance().pid_of_foreGround <<" was killed" << endl;
         } else {
-            cerr << "smash error: kill failed"<<endl;
+            perror("smash error: kill failed");
         }
     }
     else {
