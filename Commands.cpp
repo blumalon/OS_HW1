@@ -298,8 +298,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
 
     if (string(argv[0]).compare("fg") == 0) {
-        if (argc > 2)
-        {
+        if (argc > 2){
             if (argc > 3)
                 throw std::invalid_argument("smash error: fg: invalid arguments");
             ssize_t idx = string(argv[2]).find_first_not_of(" ");
@@ -934,6 +933,10 @@ ForegroundCommand::ForegroundCommand(const char *cmd_line):BuiltInCommand(cmd_li
 
 void ForegroundCommand::execute() {
     JobsList::JobEntry* to_bring = SmallShell::getInstance().getJobList()->getJobById(jobID_to_foreground);
+    if (to_bring == nullptr) {
+        string to_throw = "smash error: fg: job-id "+to_string(jobID_to_foreground)+" does not exist";
+        throw std::invalid_argument(to_throw);
+    }
     pid_t PID = to_bring->getPid();
     cout << to_bring->getCommandLine() << " " << (int)(PID) <<endl;
     waitpid(PID, nullptr, WNOHANG);
