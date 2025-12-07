@@ -359,7 +359,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     }
     if (string(argv[0]).compare("du") == 0) {
 
-        if (argc < 2) cerr << "smash error: du: too many arguments" << endl;
+        if (argc < 2) throw std::invalid_argument("smash error: du: too many arguments");
         if (argc == 2) return new DiskUsageCommand(cmd_line, string(argv[1]));
         if (argc == 1)
         {
@@ -367,7 +367,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
         }
     }
     if (string(argv[0]).compare("unsetenv") == 0) {
-        if (argc == 1) cerr << "smash error: unsetenv: not enough arguments" << endl;
+        if (argc == 1) throw std::invalid_argument("smash error: unsetenv: not enough arguments");
         return new UnSetEnvCommand(cmd_line);
     }
     // For example:
@@ -582,11 +582,11 @@ void ChangeDirCommand::execute()
     char* prevPath = *smash.getPreviousDirPtr();
     if (!prevPath && string(moveTo).compare("-") == 0)
     {
-        cerr << "smash error: cd: OLDPWD not set" << endl;
+        throw std::invalid_argument("smash error: cd: OLDPWD not set");
         return;
     }
     char* old_cwd = getcwd(nullptr, 0);
-    if (!old_cwd) cerr << "smash error: getcwd failed" << endl;
+    if (!old_cwd) throw std::runtime_error("smash error: getcwd failed");
     if (prevPath != nullptr && string(moveTo).compare("-") == 0)
     {
         moveTo = prevPath;
@@ -651,7 +651,8 @@ void SmallShell::addAlias(char** argv, const char* cmd_line)
     }
     else
     {
-        cerr << "smash error: alias: " << name << " already exists or is a reserved command" << endl;
+        string to_throw = "smash error: alias: " + name + " already exists or is a reserved command";
+        throw std::invalid_argument(to_throw);
     }
 }
 
@@ -685,7 +686,7 @@ void AliasCommand::execute()
         // }
         // size_t spot = flip.find_first_of("'");
 
-        cerr << "smash error: alias: invalid alias format" << endl;
+        throw std::invalid_argument("smash error: alias: invalid alias format");
     }
 }
 
@@ -703,7 +704,7 @@ void UnAliasCommand::execute()
     argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
-        cerr << "smash error: unalias: not enough arguments" << endl;
+        throw std::invalid_argument("smash error: unalias: not enough arguments");
     }
     else
     {
@@ -712,8 +713,8 @@ void UnAliasCommand::execute()
         {
             if(!AliasExists(std::string(argv[i])))
             {
-                cerr << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
-                return;
+                string to_throw = "smash error: unalias: " + string(argv[i]) + " alias does not exist";
+                throw std::invalid_argument(to_throw);
             }
             else
             {
@@ -737,7 +738,8 @@ string get_kernel_release()
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/sys/kernel/osrelease", O_RDONLY);
     if (fd == -1) {
-        std::cerr << "smash error: open failed on " << "/proc/sys/kernel/osrelease" << std::endl;
+        string to_throw = string("smash error: open failed on ") + string("/proc/sys/kernel/osrelease");
+        throw std::runtime_error(to_throw);
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -752,7 +754,8 @@ string get_system_type()
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/version", O_RDONLY);
     if (fd == -1) {
-        std::cerr << "smash error: open failed on " << "/proc/version " << std::endl;
+        string to_throw = string("smash error: open failed on ") = string("/proc/version ");
+        throw std::runtime_error(to_throw);
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -767,7 +770,9 @@ string get_hostname()
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/sys/kernel/hostname", O_RDONLY);
     if (fd == -1) {
-        std::cerr << "smash error: open failed on " << "/proc/sys/kernel/hostname" << std::endl;
+        string to_throw =string("smash error: open failed on ") +
+                         string("/proc/sys/kernel/hostname");
+        throw std::runtime_error(to_throw);
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -784,11 +789,11 @@ string get_boot_time()
     struct timespec currentTime;
     if(clock_gettime(CLOCK_BOOTTIME, &timeElapsed) != 0)
     {
-        cerr << "Failed in getting boot time" << endl;
+        throw std::runtime_error("Failed in getting boot time");
     }
     if(clock_gettime(CLOCK_REALTIME, &currentTime) != 0)
     {
-        cerr << "Failed in getting current time" << endl;
+        throw std::runtime_error("Failed in getting current time");
     }
     time_t bootTimeInSec = currentTime.tv_sec - timeElapsed.tv_sec;
     struct tm* bootTime = std::localtime(&bootTimeInSec);
@@ -1025,15 +1030,13 @@ void RedirectionCommand::execute()
 
     int fd = open(path.c_str(), flags, 0644);
     if (fd == -1) {
-        cerr << "smash error: Could Not Open File" << endl;
-        return;
+        throw std::runtime_error("smash error: Could Not Open File");
     }
 
     if (dup2(fd, STDOUT_FILENO) == -1)
     {
-        cerr << "smash error: dup2 Failed" << endl;
         close(fd);
-        return;
+        throw std::runtime_error("smash error: dup2 Failed");
     }
     close(fd);
     Command* newCommand = SmallShell::getInstance().CreateCommand(command.c_str());
@@ -1043,7 +1046,7 @@ void RedirectionCommand::execute()
         delete newCommand;
     }
     if (dup2(stdout_temp, STDOUT_FILENO) == -1) {
-        cerr << "smash error: dup2 failed" << endl;
+        throw std::runtime_error("smash error: dup2 failed");
     }
     close(stdout_temp);
 }
@@ -1088,8 +1091,8 @@ void UnSetEnvCommand::execute()
         }
         if (!var_found)
         {
-            cerr << "smash error: unsetenv: " << varName << " does not exist" << endl;
-            return;
+            string to_throw = "smash error: unsetenv: " + varName + " does not exist";
+            throw std::runtime_error(to_throw);
         }
         var_found = false;
     }
