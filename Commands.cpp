@@ -423,7 +423,7 @@ BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
    cmdLine = string(cmd_line);
     for (auto &ch: cmdLine) {
         if (ch == '&')
-            ch == ' ';
+            ch = (char)(20);
     }
 }
 
@@ -755,9 +755,8 @@ string get_system_type(){
     char buffer[SYSINFO_BUFFER_SIZE];
     int fd = open("/proc/version", O_RDONLY);
     if (fd == -1) {
-        string to_throw = string("smash error: open failed");
-        perror(to_throw.c_str());
-        throw std::runtime_error('\0');
+        perror("smash error: open failed");
+        throw std::runtime_error(nullptr);
     }
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
     if (bytes_read > 0) {
@@ -1008,7 +1007,7 @@ size_t DUAux(string path){
 
 void DiskUsageCommand::execute()
 {
-        cout << "Total disk usage: " << DUAux(path) << " KB" << endl;
+        cout << "Total disk usage: " << (DUAux(path) + 1023)/1024 << " KB" << endl;
 }
 
 RedirectionCommand::RedirectionCommand(std::string command,std::string path, bool is_append, bool is_overwrite) : Command("")
