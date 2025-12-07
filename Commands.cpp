@@ -296,6 +296,7 @@ Command *SmallShell::CreateCommand(const char *cmd_line) {
     if (string(argv[0]).compare("fg") == 0) {
         if (argc > 2)
         {
+
             throw std::invalid_argument("smash error: fg: invalid arguments");
         }
         if (argc == 2) {
@@ -387,6 +388,14 @@ void ChangePrompt::execute(){
 Command::~Command() = default;
 
 BuiltInCommand::BuiltInCommand(const char *cmd_line) : Command(cmd_line) {
+    cmd_to_print = std::string(cmd_line);
+    if (cmd_to_print.size() < 2)
+        return;
+   cmdLine = string(cmd_line);
+    for (auto &ch: cmdLine) {
+        if (ch == '&')
+            ch == ' ';
+    }
 }
 
 KillCommand::KillCommand(const char *cmd_line, JobsList *jobs): BuiltInCommand(cmd_line) {
@@ -524,11 +533,11 @@ void ChangeDirCommand::execute()
     char* prevPath = *smash.getPreviousDirPtr();
     if (!prevPath && string(moveTo).compare("-") == 0)
     {
-        cout << "smash error: cd: OLDPWD not set" << endl;
+        cerr << "smash error: cd: OLDPWD not set" << endl;
         return;
     }
     char* old_cwd = getcwd(nullptr, 0);
-    if (!old_cwd) cout << "smash error: getcwd failed" << endl;
+    if (!old_cwd) cerr << "smash error: getcwd failed" << endl;
     if (prevPath != nullptr && string(moveTo).compare("-") == 0)
     {
         moveTo = prevPath;
@@ -606,7 +615,7 @@ void AliasCommand::execute()
     int argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
-        cout << SmallShell::getInstance().getAliasVector().empty();
+        //SmallShell::getInstance().getAliasVector().empty();
         SmallShell::getInstance().printAlias();
         return;
     }
@@ -617,7 +626,17 @@ void AliasCommand::execute()
     }
     else
     {
-        cout << "smash error: alias: invalid alias format" << endl;
+        // string flip = cmd_s;
+        // int start = 0, end = cmd_s.size() - 1;
+        // while (start < end) {
+        //     char cpy = flip[start];
+        //     flip[start] = flip[end];
+        //     flip[end] = cpy;
+        //     start++; --end;
+        // }
+        // size_t spot = flip.find_first_of("'");
+
+        cerr << "smash error: alias: invalid alias format" << endl;
     }
 }
 
@@ -635,7 +654,7 @@ void UnAliasCommand::execute()
     argc = _parseCommandLine(raw_cmd_line, argv);
     if (argc == 1)
     {
-        cout << "smash error: unalias: not enough arguments" << endl;
+        cerr << "smash error: unalias: not enough arguments" << endl;
     }
     else
     {
@@ -644,7 +663,7 @@ void UnAliasCommand::execute()
         {
             if(!AliasExists(std::string(argv[i])))
             {
-                cout << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
+                cerr << "smash error: unalias: " << argv[i] << " alias does not exist" << endl;
                 return;
             }
             else
